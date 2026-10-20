@@ -21,17 +21,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Install Android SDK Platform
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Install Gradle 8.7
+        shell: bash
+        run: |
+          curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
+
       - name: Create Web2App Project
         shell: bash
         run: |
           set -e
-          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values gradle/wrapper
+          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values
           
           cat << 'EOF' > settings.gradle
           rootProject.name = "Web2App"
@@ -125,18 +132,14 @@ jobs:
           }
           EOF
 
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.7'
-
       - name: Build APK
-        run: gradle assembleDebug --no-daemon
+        shell: bash
+        run: |
+          gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: x1One-Web2App-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-
 
