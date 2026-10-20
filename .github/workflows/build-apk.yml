@@ -21,6 +21,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android Licenses
+        run: yes | sdkmanager --licenses || true
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -85,7 +91,7 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <application
                   android:label="x1One App"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -96,21 +102,15 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > app/src/main/res/values/styles.xml
-          <resources></resources>
-          EOF
-
           cat << 'EOF' > app/src/main/java/com/x1oneai/web2app/MainActivity.java
           package com.x1oneai.web2app;
-          import android.annotation.SuppressLint;
+          import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               private WebView webView;
-              @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
