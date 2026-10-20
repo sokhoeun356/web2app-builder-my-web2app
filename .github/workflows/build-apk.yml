@@ -21,6 +21,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
       - name: Create Web2App Project
         shell: bash
         run: |
@@ -43,7 +49,9 @@ jobs:
           EOF
 
           cat << 'EOF' > app/build.gradle
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace 'com.x1oneai.web2app'
               compileSdk 34
@@ -108,14 +116,19 @@ jobs:
               }
               @Override
               public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) { webView.goBack(); }
-                  else { super.onBackPressed(); }
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
               }
           }
           EOF
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
 
       - name: Build APK
         run: gradle assembleDebug --no-daemon
@@ -125,4 +138,5 @@ jobs:
         with:
           name: x1One-Web2App-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
 
