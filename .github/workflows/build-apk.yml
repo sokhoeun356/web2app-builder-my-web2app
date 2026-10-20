@@ -4,178 +4,74 @@ on:
   workflow_dispatch:
     inputs:
       website_url:
-        description: "Website URL to load inside the APK"
+        description: "Website URL"
         required: true
-        default: "https://example.com"
-        type: string
-
-      app_name:
-        description: "Application name"
-        required: true
-        default: "x1One Ai Web2app"
-        type: string
-
-      package_name:
-        description: "Android package name"
-        required: true
-        default: "com.x1oneai.web2app"
-        type: string
+        default: "https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
 
 jobs:
-  build-apk:
-    name: Build Android APK
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check inputs
-        shell: bash
-        env:
-          WEBSITE_URL: ${{ inputs.website_url }}
-          APP_NAME: ${{ inputs.app_name }}
-          PACKAGE_NAME: ${{ inputs.package_name }}
-        run: |
-          set -e
-
-          if [[ ! "$WEBSITE_URL" =~ ^https?:// ]]; then
-            echo "ERROR: Website URL must start with http:// or https://"
-            exit 1
-          fi
-
-          if [[ ! "$PACKAGE_NAME" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
-            echo "ERROR: Invalid Android package name."
-            echo "Example: com.x1oneai.web2app"
-            exit 1
-          fi
-
-          if [ -z "$APP_NAME" ]; then
-            echo "ERROR: App name cannot be empty."
-            exit 1
-          fi
-
-          echo "Website URL: $WEBSITE_URL"
-          echo "App Name: $APP_NAME"
-          echo "Package Name: $PACKAGE_NAME"
-
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Android SDK Platform
+      - name: Create Web2App Project
         shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Download Gradle
-        shell: bash
-        run: |
-          curl -L \
-            -o /tmp/gradle.zip \
-            https://services.gradle.org/distributions/gradle-8.7-bin.zip
-
-          unzip -q /tmp/gradle.zip -d /tmp
-          echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
-
-          gradle --version
-
-      - name: Create Android project
-        shell: bash
-        env:
-          WEBSITE_URL: ${{ inputs.website_url }}
-          APP_NAME: ${{ inputs.app_name }}
-          PACKAGE_NAME: ${{ inputs.package_name }}
         run: |
           set -e
-          python3 - << 'PY'
-          import os
-          import sys
+          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values gradle/wrapper
+          
+          cat << 'EOF' > settings.gradle
+          rootProject.name = "Web2App"
+          include ':app'
+          EOF
 
-          package_name = os.environ.get("PACKAGE_NAME", "com.x1oneai.web2app")
-          app_name = os.environ.get("APP_NAME", "x1One Ai Web2app")
-          url = os.environ.get("WEBSITE_URL", "https://example.com")
-
-          os.makedirs("android-app/app/src/main/res/values", exist_ok=True)
-          os.makedirs("android-app/gradle/wrapper", exist_ok=True)
-
-          settings_gradle = 'rootProject.name = "Web2App"\ninclude(":app")\n'
-          with open("android-app/settings.gradle", "w", encoding="utf-8") as f:
-              f.write(settings_gradle)
-
-          root_build_gradle = """
+          cat << 'EOF' > build.gradle
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath("com.android.tools.build:gradle:8.5.2")
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
-          """
-          with open("android-app/build.gradle", "w", encoding="utf-8") as f:
-              f.write(root_build_gradle.strip() + "\n")
+          EOF
 
-          app_build_gradle = f"""
-          plugins {{
-              id("com.android.application")
-          }}
-
-          android {{
-              namespace "{package_name}"
-              compileSdk 35
-
-              defaultConfig {{
-                  applicationId "{package_name}"
+          cat << 'EOF' > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.x1oneai.web2app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.x1oneai.web2app"
                   minSdk 21
-                  targetSdk 35
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
-              }}
-
-              buildTypes {{
-                  release {{
-                      minifyEnabled false
-                  }}
-                  debug {{
-                      debuggable true
-                  }}
-              }}
-
-              compileOptions {{
+              }
+              compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
-              }}
-          }}
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
 
-          dependencies {{
-              implementation("androidx.appcompat:appcompat:1.7.0")
-          }}
-          """
-          with open("android-app/app/build.gradle", "w", encoding="utf-8") as f:
-              f.write(app_build_gradle.strip() + "\n")
-
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application
-                  android:allowBackup="true"
-                  android:label="@string/app_name"
-                  android:supportsRtl="true"
+                  android:label="x1One App"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -183,100 +79,50 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          """
-          with open("android-app/app/src/main/AndroidManifest.xml", "w", encoding="utf-8") as f:
-              f.write(manifest.strip() + "\n")
+          EOF
 
-          strings_xml = f"""<resources>
-              <string name="app_name">{app_name}</string>
-          </resources>
-          """
-          with open("android-app/app/src/main/res/values/strings.xml", "w", encoding="utf-8") as f:
-              f.write(strings_xml.strip() + "\n")
+          cat << 'EOF' > app/src/main/res/values/styles.xml
+          <resources></resources>
+          EOF
 
-          pkg_path = package_name.replace(".", "/")
-          java_dir = os.path.join("android-app/app/src/main/java", pkg_path)
-          os.makedirs(java_dir, exist_ok=True)
-
-          java_code = f"""package {package_name};
-
+          cat << 'EOF' > app/src/main/java/com/x1oneai/web2app/MainActivity.java
+          package com.x1oneai.web2app;
           import android.annotation.SuppressLint;
           import android.os.Bundle;
-          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends AppCompatActivity {{
+          public class MainActivity extends AppCompatActivity {
               private WebView webView;
-
               @SuppressLint("SetJavaScriptEnabled")
               @Override
-              protected void onCreate(Bundle savedInstanceState) {{
+              protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   webView = new WebView(this);
                   setContentView(webView);
-
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  settings.setLoadWithOverviewMode(true);
-                  settings.setUseWideViewPort(true);
-
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
                   webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("{url}");
-              }}
-
+                  webView.loadUrl("${{ inputs.website_url }}");
+              }
               @Override
-              public void onBackPressed() {{
-                  if (webView != null && webView.canGoBack()) {{
-                      webView.goBack();
-                  }} else {{
-                      super.onBackPressed();
-                  }}
-              }}
-          }}
-          """
-          with open(os.path.join(java_dir, "MainActivity.java"), "w", encoding="utf-8") as f:
-              f.write(java_code.strip() + "\n")
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) { webView.goBack(); }
+                  else { super.onBackPressed(); }
+              }
+          }
+          EOF
 
-          print("Android project created successfully.")
-          PY
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
-        working-directory: android-app
-        shell: bash
-        run: |
-          set -e
-          gradle assembleDebug --no-daemon --stacktrace
-
-      - name: Rename APK
-        shell: bash
-        run: |
-          set -e
-          mkdir -p output
-          cp \
-            android-app/app/build/outputs/apk/debug/app-debug.apk \
-            "output/x1One-Ai-Web2app-debug.apk"
-          ls -lh output/
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: x1One-Ai-Web2app-APK
-          path: output/x1One-Ai-Web2app-debug.apk
-          retention-days: 7
-```[span_1](start_span)[span_1](end_span)[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
+          name: x1One-Web2App-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
 
-4. ចុចប៊ូតុងពណ៌បៃតង **"Commit changes..."** នៅខាងលើស្តាំ[span_4](start_span)[span_4](end_span) -> រួចចុច **"Commit changes"** ម្តងទៀត[span_5](start_span)[span_5](end_span)។
-
----
-
-### ជំហានទី ៣៖ ចុច Build យក APK ភ្លាម
-1. ចុចលើពាក្យ **`Actions`** នៅជួរខាងលើ[span_6](start_span)[span_6](end_span)
-2. ចុចលើឈ្មោះ **`x1One Ai Web2app - Build APK`** នៅខាងឆ្វេងដៃ[span_7](start_span)[span_7](end_span)
-3. ចុចប៊ូតុងពណ៌បៃតង **"Run workflow"**[span_8](start_span)[span_8](end_span)
-4. បិទភ្ជាប់តំណភ្ជាប់ Website URL របស់អ្នក៖
-   ```text
-   https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app
