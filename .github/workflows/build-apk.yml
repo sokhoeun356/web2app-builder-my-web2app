@@ -21,24 +21,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Android SDK Platform
+      - name: Setup Android SDK
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Install Gradle 8.7
-        shell: bash
-        run: |
-          curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q /tmp/gradle.zip -d /tmp
-          echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
-
       - name: Create Web2App Project
         shell: bash
         run: |
           set -e
-          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values
+          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values gradle/wrapper
           
           cat << 'EOF' > settings.gradle
           rootProject.name = "Web2App"
@@ -132,10 +125,26 @@ jobs:
           }
           EOF
 
-      - name: Build APK
+      - name: Download Gradle Wrapper
         shell: bash
         run: |
-          gradle assembleDebug --no-daemon
+          set -e
+          curl -L -o gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.2.2/gradle/wrapper/gradle-wrapper.jar
+          mv gradle-wrapper.jar gradle/wrapper/
+          cat << 'EOF' > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.2.2-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          curl -L -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.2.2/gradlew
+          chmod +x gradlew
+
+      - name: Build APK with Gradle Wrapper
+        shell: bash
+        run: |
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
