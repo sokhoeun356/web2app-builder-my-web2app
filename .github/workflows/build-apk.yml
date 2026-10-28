@@ -38,27 +38,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ដំឡើង Gradle Environment ផ្លូវការ
+      # ១. ដំឡើង Gradle Environment
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ២. បង្កើតឯកសារ settings.gradle បើគ្មានក្នុងគម្រោង (កម្ចាត់ does not contain a Gradle build)
-      - name: Ensure Settings & Wrapper Configuration
+      # ២. បង្កើត Settings និង Wrapper ជំនាន់ 8.2 ស៊ីគ្នាជាមួយ Android
+      - name: Ensure Settings & Compatible Wrapper
         run: |
           if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "Generating root settings.gradle..."
             echo "rootProject.name = 'x1One-App'" > settings.gradle
             if [ -d "app" ]; then
               echo "include ':app'" >> settings.gradle
             fi
           fi
           
-          if [ ! -f "./gradlew" ]; then
-            gradle wrapper
-            chmod +x gradlew
-          else
-            chmod +x gradlew
-          fi
+          # បង្កើត Wrapper ដោយចាក់សោត្រឹមកំណែ 8.2 (ស៊ីគ្នាជាមួយ Android)
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
 
       # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
@@ -91,7 +87,7 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
 
       # ៧. បញ្ចេញឯកសារ APK
-      - name: Upload Output Artifact
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
