@@ -38,44 +38,44 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ដំឡើង Gradle និង Android SDK ដោយផ្ទាល់ (ដោះស្រាយបញ្ហា ./gradlew: No such file)
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      # ១. ស្វែងរក និងផ្ដល់សិទ្ធិឱ្យ gradlew
+      - name: Prepare Gradlew Executable
+        run: |
+          find . -name "gradlew" -exec chmod +x {} +
+          if [ ! -f "./gradlew" ]; then
+            MAIN_GRADLEW=$(find . -name "gradlew" | head -n 1)
+            [ -n "$MAIN_GRADLEW" ] && cp "$MAIN_GRADLEW" ./gradlew
+          fi
 
-      # ១. ទាញយករូប Logo (បើមាន)
+      # ២. ប្តូររូប Logo App (បើមាន URL ផ្ញើមកពី Website)
       - name: Process Custom App Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-hdpi/ic_launcher.png || true
-          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
-          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
-          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
-          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
-          cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
+          # ស្វែងរក Folder mipmap ទាំងអស់ក្នុងគម្រោងដោយស្វ័យប្រវត្តិ
+          MIPMAP_DIR=$(find . -type d -name "mipmap-xxxhdpi" | head -n 1)
+          if [ -n "$MIPMAP_DIR" ]; then
+            RES_DIR=$(dirname "$MIPMAP_DIR")
+            curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/custom_icon.png || true
+            for dir in "$RES_DIR"/mipmap-*; do
+              cp /tmp/custom_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+              cp /tmp/custom_icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+            done
+          fi
 
-      # ២. បញ្ចូល Website URL ទៅក្នុងកូដ
+      # ៣. បញ្ចូល Website URL ទៅក្នុងកូដ
       - name: Inject Website URL
         run: |
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
 
-      # ៣. Build Android APK ដោយប្រើ Gradle Action ផ្ទាល់
+      # ៤. Compile APK តាម Task ដើម (ដំណើរការដូចកាលពី Run #8-#13 ដែលធ្លាប់ជោគជ័យ)
       - name: Execute Android Build
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            gradle :app:assembleDebug --no-daemon --stacktrace || gradle assembleDebug --no-daemon --stacktrace
-          fi
+          ./gradlew assembleRelease --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace || ./gradlew build --no-daemon --stacktrace
 
-      # ៤. Upload ឯកសារ APK
+      # ៥. បញ្ចេញឯកសារ APK គ្រប់ទីតាំងទាំងអស់
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
-          path: "**/build/outputs/apk/**/*.apk"
-          if-no-files-found: ignore
+          path: "**/*.apk"
+          if-no-files-found: warn
