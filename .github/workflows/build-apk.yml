@@ -38,25 +38,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ដំឡើង Gradle Environment
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ២. បង្កើត Settings និង Wrapper ជំនាន់ 8.2 ស៊ីគ្នាជាមួយ Android
-      - name: Ensure Settings & Compatible Wrapper
-        run: |
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "rootProject.name = 'x1One-App'" > settings.gradle
-            if [ -d "app" ]; then
-              echo "include ':app'" >> settings.gradle
-            fi
-          fi
-          
-          # បង្កើត Wrapper ដោយចាក់សោត្រឹមកំណែ 8.2 (ស៊ីគ្នាជាមួយ Android)
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-
-      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -64,12 +49,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ៤. កំណត់ឈ្មោះ App
+      # ២. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
+      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -81,13 +66,36 @@ jobs:
             done
           done
 
-      # ៦. ដំណើរការ Compile APK
-      - name: Execute Android Build
+      # ៤. រៀបចំ Settings ភ្ជាប់ Module ស្វ័យប្រវត្តិ និង Build
+      - name: Configure and Execute Build
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          # ស្វែងរកឯកសារ settings.gradle ដើម ប្រសិនបើមានក្នុង Subfolder
+          ORIGINAL_SETTINGS=$(find . -mindepth 2 -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          
+          if [ -n "$ORIGINAL_SETTINGS" ]; then
+            APP_ROOT=$(dirname "$ORIGINAL_SETTINGS")
+            echo "Found original project at: $APP_ROOT"
+            cd "$APP_ROOT"
+            gradle wrapper --gradle-version 8.2
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          else
+            # បង្កើត settings.gradle ភ្ជាប់គ្រប់ Folder ដែលមាន build.gradle
+            echo "rootProject.name = 'x1One-App'" > settings.gradle
+            for d in */ ; do
+              if [ -f "$d/build.gradle" ] || [ -f "$d/build.gradle.kts" ]; then
+                mod_name=$(basename "$d")
+                echo "include ':$mod_name'" >> settings.gradle
+              fi
+            done
+            
+            gradle wrapper --gradle-version 8.2
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          fi
 
-      # ៧. បញ្ចេញឯកសារ APK
-      - name: Upload Finished APK
+      # ៥. បញ្ចេញឯកសារ APK
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
