@@ -38,21 +38,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ដំឡើង Gradle ផ្លូវការ ដើម្បីបង្កើត Wrapper
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      # ២. បង្កើត gradlew ស្វ័យប្រវត្តិ ប្រសិនបើបាត់ពី Repository (កម្ចាត់ Exit code 127)
-      - name: Generate Gradle Wrapper
+      # ១. បង្ហាញរចនាសម្ព័ន្ធឯកសារជាក់ស្តែងក្នុង Repository
+      - name: Inspect Repository Structure
         run: |
-          if [ ! -f "./gradlew" ]; then
-            gradle wrapper
-            chmod +x gradlew
-          else
-            chmod +x gradlew
-          fi
+          echo "=== ROOT DIRECTORY CONTENT ==="
+          ls -la
+          echo "=== SEARCHING BUILD FILES ==="
+          find . -maxdepth 3 \( -name "build.gradle*" -o -name "settings.gradle*" -o -name "gradlew*" \)
 
-      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ២. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -60,30 +54,31 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ៤. កំណត់ឈ្មោះ App
+      # ៣. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
-      - name: Process Custom Icon
-        if: "${{ github.event.inputs.icon_url != '' }}"
-        run: |
-          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/logo.png || true
-          find . -type d -name "res" | while read resdir; do
-            for dir in "$resdir"/mipmap-*; do
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher.png" 2>/dev/null || true
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher_round.png" 2>/dev/null || true
-            done
-          done
-
-      # ៦. ដំណើរការ Compile Android APK តាមរយៈ Wrapper ដែលទើបបង្កើត
+      # ៤. រកទីតាំងពិតប្រាកដ រួច Compile ចេញពី Folder នោះផ្ទាល់
       - name: Execute Android Build
         run: |
-          ./gradlew assembleRelease --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          SETTINGS_PATH=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          if [ -n "$SETTINGS_PATH" ]; then
+            TARGET_DIR=$(dirname "$SETTINGS_PATH")
+            echo "Entering directory containing settings: $TARGET_DIR"
+            cd "$TARGET_DIR"
+          fi
+          
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --stacktrace || ./gradlew assemble --stacktrace
+          else
+            echo "No local gradlew, searching system gradle..."
+            gradle assembleDebug --stacktrace || gradle assemble --stacktrace
+          fi
 
-      # ៧. បញ្ចេញឯកសារ APK
-      - name: Upload Finished APK
+      # ៥. បញ្ចេញឯកសារ APK
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
