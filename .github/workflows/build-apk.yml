@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       website_url:
-        description: 'Clean Website URL'
+        description: 'Target Website URL'
         required: true
         default: 'https://google.com'
       app_name:
@@ -20,7 +20,7 @@ on:
         required: false
         default: ''
       is_free:
-        description: 'Has Company Banner'
+        description: 'Company Banner (true/false)'
         required: false
         default: 'true'
 
@@ -38,44 +38,71 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ស្វែងរក និងផ្ដល់សិទ្ធិឱ្យ gradlew
-      - name: Prepare Gradlew Executable
+      # ១. ស្វែងរក និងផ្ដល់សិទ្ធិប្រតិបត្តិដល់ Gradle Wrapper ស្វ័យប្រវត្តិ
+      - name: Setup Gradle Wrapper Permission
         run: |
           find . -name "gradlew" -exec chmod +x {} +
           if [ ! -f "./gradlew" ]; then
-            MAIN_GRADLEW=$(find . -name "gradlew" | head -n 1)
-            [ -n "$MAIN_GRADLEW" ] && cp "$MAIN_GRADLEW" ./gradlew
+            GRADLE_EXEC=$(find . -name "gradlew" | head -n 1)
+            [ -n "$GRADLE_EXEC" ] && cp "$GRADLE_EXEC" ./gradlew && chmod +x ./gradlew
           fi
 
-      # ២. ប្តូររូប Logo App (បើមាន URL ផ្ញើមកពី Website)
-      - name: Process Custom App Icon
+      # ២. កំណត់ឈ្មោះ App និង Website URL ទៅក្នុងគម្រោង Android
+      - name: Configure App Details & Target URL
+        run: |
+          # ប្តូរឈ្មោះកម្មវិធីក្នុង strings.xml
+          find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
+          
+          # បញ្ចូល URL វេបសាយទៅក្នុងកូដ Java ឬ Kotlin
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
+
+      # ៣. ទាញយក និងប្តូររូប Logo ស្វ័យប្រវត្តិគ្រប់ទំហំ (បើមាន URL ផ្ញើមក)
+      - name: Process Custom Logo
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          # ស្វែងរក Folder mipmap ទាំងអស់ក្នុងគម្រោងដោយស្វ័យប្រវត្តិ
-          MIPMAP_DIR=$(find . -type d -name "mipmap-xxxhdpi" | head -n 1)
-          if [ -n "$MIPMAP_DIR" ]; then
-            RES_DIR=$(dirname "$MIPMAP_DIR")
-            curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/custom_icon.png || true
-            for dir in "$RES_DIR"/mipmap-*; do
-              cp /tmp/custom_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
-              cp /tmp/custom_icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/app_logo.png || true
+          if [ -f /tmp/app_logo.png ]; then
+            find . -type d -name "res" | while read resdir; do
+              for mipmap in "$resdir"/mipmap-*; do
+                if [ -d "$mipmap" ]; then
+                  cp /tmp/app_logo.png "$mipmap/ic_launcher.png" 2>/dev/null || true
+                  cp /tmp/app_logo.png "$mipmap/ic_launcher_round.png" 2>/dev/null || true
+                fi
+              done
             done
           fi
 
-      # ៣. បញ្ចូល Website URL ទៅក្នុងកូដ
-      - name: Inject Website URL
+      # ៤. ទាញយករូប Splash / Background (បើមាន URL ផ្ញើមក)
+      - name: Process Background Splash Image
+        if: "${{ github.event.inputs.bg_url != '' }}"
         run: |
-          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
+          find . -type d -name "drawable" | head -n 1 | while read drawdir; do
+            curl -sL "${{ github.event.inputs.bg_url }}" -o "$drawdir/custom_background.png" 2>/dev/null || true
+          done
 
-      # ៤. Compile APK តាម Task ដើម (ដំណើរការដូចកាលពី Run #8-#13 ដែលធ្លាប់ជោគជ័យ)
-      - name: Execute Android Build
+      # ៥. កំណត់ Banner Free vs Paid ទៅតាមកញ្ចប់
+      - name: Configure In-App Banner
         run: |
-          ./gradlew assembleRelease --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace || ./gradlew build --no-daemon --stacktrace
+          if [ "${{ github.event.inputs.is_free }}" == "true" ]; then
+            find . -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' {} + 2>/dev/null || true
+          else
+            find . -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' {} + 2>/dev/null || true
+          fi
 
-      # ៥. បញ្ចេញឯកសារ APK គ្រប់ទីតាំងទាំងអស់
-      - name: Upload Output Artifact
+      # ៦. ដំណើរការ Compile APK (ប្រើប្រព័ន្ធឆ្លាតវៃរក Task ដើមដែលធ្លាប់ជោគជ័យ)
+      - name: Build Android Package
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleRelease --no-daemon || ./gradlew assemble --no-daemon || ./gradlew assembleDebug --no-daemon
+          else
+            echo "Gradlew not found, executing fallback gradle build"
+            gradle assemble --no-daemon
+          fi
+
+      # ៧. Upload ឯកសារ APK ដែលចេញរួចរាល់
+      - name: Deliver Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: Web2App-APK
-          path: "**/*.apk"
-          if-no-files-found: warn
+          name: "${{ github.event.inputs.app_name }}-APK"
+          path: "**/build/outputs/apk/**/*.apk"
+          if-no-files-found: ignore
