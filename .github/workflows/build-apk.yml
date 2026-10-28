@@ -40,47 +40,45 @@ jobs:
       - name: Install ImageMagick & Curl
         run: sudo apt-get update && sudo apt-get install -y imagemagick curl
 
-      # ១. ពិនិត្យមើលរូប Logo៖ បើមានបញ្ជូនមក ទើបដោនឡូត និងកែទំហំ បើអត់ទេ ប្រើរូបដើម
-      - name: Process Custom App Logo (If provided)
+      # ១. ទាញយក Logo បើមាន
+      - name: Process Custom App Logo
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
           mkdir -p app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi
-          curl -L -o raw_logo.png "${{ github.event.inputs.icon_url }}"
-          
-          # បម្លែងទំហំស្វ័យប្រវត្តិតាមស្តង់ដារ Android គ្រប់ Density
-          convert raw_logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert raw_logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert raw_logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert raw_logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert raw_logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-          
-          # ចម្លងចូល round icon ផងដែរ
-          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          curl -L -o raw_logo.png "${{ github.event.inputs.icon_url }}" || true
+          if [ -f raw_logo.png ]; then
+            convert raw_logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
+            convert raw_logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
+            convert raw_logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
+            convert raw_logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+            convert raw_logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png || true
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
+            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
+            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png || true
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png || true
+            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png || true
+          fi
 
-      # ២. ទាញយករូប Background/Splash (បើមាន)
-      - name: Process Background Splash Screen (If provided)
+      # ២. ទាញយក Background បើមាន
+      - name: Process Background Splash Screen
         if: "${{ github.event.inputs.bg_url != '' }}"
         run: |
           mkdir -p app/src/main/res/drawable
-          curl -L -o app/src/main/res/drawable/custom_background.png "${{ github.event.inputs.bg_url }}"
+          curl -L -o app/src/main/res/drawable/custom_background.png "${{ github.event.inputs.bg_url }}" || true
 
-      # ៣. កំណត់ឈ្មោះ App និង Website URL
+      # ៣. កំណត់ឈ្មោះ App និង URL
       - name: Configure App Details
         run: |
           sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml || true
-          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" || true
+          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + || true
 
-      # ៤. គ្រប់គ្រង Logo Banner (Free vs Paid)
+      # ៤. កំណត់ Banner
       - name: Configure Banner Ad
         run: |
           if [ "${{ github.event.inputs.is_free }}" == "true" ]; then
-            find app/src/main/res/layout -name "*.xml" | xargs sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' || true
+            find app/src/main/res/layout -type f -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' {} + || true
           else
-            find app/src/main/res/layout -name "*.xml" | xargs sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' || true
+            find app/src/main/res/layout -type f -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' {} + || true
           fi
 
       - name: Make Gradlew Executable
