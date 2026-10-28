@@ -14,7 +14,7 @@ on:
       icon_url:
         description: 'App Icon Image URL'
         required: false
-        default: ''
+        default: 'https://raw.githubusercontent.com/sokhoeun356/web2app-builder-my-web2app/main/app_icon.png'
       bg_url:
         description: 'Splash/Background Image URL'
         required: false
@@ -43,13 +43,20 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. រៀបចំរចនាសម្ព័ន្ធ Project Android WebView ស្តង់ដារពេញលេញ
+      # ២. រៀបចំរចនាសម្ព័ន្ធ Project Android WebView ពេញលេញ ត្រឹមត្រូវតាមស្តង់ដារ Google
       - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+          # បង្កើត proguard-rules.pro
+          touch app/proguard-rules.pro
 
           # settings.gradle
           cat << 'EOF' > settings.gradle
@@ -115,7 +122,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
+          # AndroidManifest.xml (ប្រើ @mipmap/ic_launcher ត្រឹមត្រូវតាមស្តង់ដារ)
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -124,9 +131,9 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_app_logo"
+                  android:icon="@mipmap/ic_launcher"
                   android:label="@string/app_name"
-                  android:roundIcon="@drawable/ic_app_logo"
+                  android:roundIcon="@mipmap/ic_launcher"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.Web2App"
                   android:usesCleartextTraffic="true">
@@ -143,13 +150,13 @@ jobs:
           </manifest>
           EOF
 
-          # colors.xml & styles.xml & strings.xml
+          # colors.xml, styles.xml & strings.xml
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorPrimaryDark">#3700B3</color>
-              <color name="colorAccent">#03DAC5</color>
+              <color name="colorPrimary">#0D0D11</color>
+              <color name="colorPrimaryDark">#000000</color>
+              <color name="colorAccent">#0073E6</color>
           </resources>
           EOF
 
@@ -170,20 +177,13 @@ jobs:
           </resources>
           EOF
 
-          # Default Icon
-          cat << 'EOF' > app/src/main/res/drawable/ic_app_logo.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#3DDC84"
-                  android:pathData="M0,0h108v108h-108z"/>
-          </vector>
-          EOF
+          # Default Icon (រូបសំបកក្រៅ)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > /tmp/base_icon.png
+          for dir in app/src/main/res/mipmap-*; do
+            cp /tmp/base_icon.png "$dir/ic_launcher.png"
+          done
 
-          # Layout XML
+          # activity_main.xml (Webview និង Banner Toggle)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -282,13 +282,23 @@ jobs:
           sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. ទាញយក Icon ថ្មី (បើមាន)
+      # ៤. ទាញយក Icon ថ្មីមកជំនួសក្នុង mipmap គ្រប់ទំហំ (Link រូបភាព x1One ថ្មី)
       - name: Process Custom Icon
-        if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/drawable/ic_app_logo.png || true
+          # ប្រើប្រាស់រូបភាព x1One Icon ថ្មី (រូបភាព Square ខាងលើ)
+          # ប្រសិនបើអ្នកមិនបានបញ្ចូល Link Icon ថ្មីទេ វានឹងប្រើ Icon របស់ x1One នេះដោយស្វ័យប្រវត្តិតែម្តង
+          ICON_URL="${{ github.event.inputs.icon_url }}"
+          [ -z "$ICON_URL" ] && ICON_URL="https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png"
+          
+          curl -sL "$ICON_URL" -o /tmp/custom_icon.png || curl -sL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/custom_icon.png
+          
+          if [ -s /tmp/custom_icon.png ]; then
+            for dir in app/src/main/res/mipmap-*; do
+              cp /tmp/custom_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+            done
+          fi
 
-      # ៥. ដំឡើង Gradle និងដំណើរការ Assemble APK
+      # ៥. ដំឡើង Gradle និងដំណើរការ Compile
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
@@ -296,7 +306,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon
 
       # ៦. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
