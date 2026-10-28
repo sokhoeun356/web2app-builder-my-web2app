@@ -38,13 +38,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Accept Android Licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
@@ -58,7 +51,7 @@ jobs:
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៣. ទាញយក និងប្តូររូប Icon (បើមាន URL)
+      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -70,32 +63,29 @@ jobs:
             done
           done
 
-      # ៤. ស្វែងរកទីតាំងពិតប្រាកដនៃ Gradle Project ហើយ Compile ចេញពីទីតាំងនោះផ្ទាល់
+      # ៤. រកទីតាំង gradlew ពិតប្រាកដ រួច Build ពី Folder នោះផ្ទាល់ (ដោះស្រាយ does not contain a Gradle build)
       - name: Execute Android Build
         run: |
-          # ស្វែងរកទីតាំង build.gradle ឬ settings.gradle
-          BUILD_FILE=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
-          if [ -n "$BUILD_FILE" ]; then
-            PROJECT_DIR=$(dirname "$BUILD_FILE")
-            echo "Found Android Project Directory at: $PROJECT_DIR"
+          GRADLEW_FILE=$(find . -name "gradlew" | head -n 1)
+          if [ -n "$GRADLEW_FILE" ]; then
+            PROJECT_DIR=$(dirname "$GRADLEW_FILE")
+            echo "Entering Android Project Directory: $PROJECT_DIR"
             cd "$PROJECT_DIR"
-          fi
-
-          # ផ្ដល់សិទ្ធិឱ្យ gradlew បើមានក្នុង Folder នោះ
-          [ -f "./gradlew" ] && chmod +x ./gradlew
-
-          # ដំណើរការ Build ក្នុង Folder គម្រោងផ្ទាល់
-          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
             ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
           else
-            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
+            echo "Searching by build.gradle..."
+            BUILD_GRADLE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+            PROJECT_DIR=$(dirname "$BUILD_GRADLE")
+            cd "$PROJECT_DIR"
+            chmod +x ./gradlew 2>/dev/null || true
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
           fi
 
-      # ៥. Upload APK
+      # ៥. បញ្ចេញឯកសារ APK គ្រប់ទីតាំងទាំងអស់
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
           path: "**/*.apk"
           if-no-files-found: ignore
-
