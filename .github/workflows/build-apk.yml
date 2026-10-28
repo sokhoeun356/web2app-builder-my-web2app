@@ -38,7 +38,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ១. ដំឡើង Gradle ផ្លូវការ ដើម្បីបង្កើត Wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # ២. បង្កើត gradlew ស្វ័យប្រវត្តិ ប្រសិនបើបាត់ពី Repository (កម្ចាត់ Exit code 127)
+      - name: Generate Gradle Wrapper
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper
+            chmod +x gradlew
+          else
+            chmod +x gradlew
+          fi
+
+      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -46,12 +60,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ២. កំណត់ឈ្មោះ App
+      # ៤. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
+      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -63,26 +77,12 @@ jobs:
             done
           done
 
-      # ៤. រកទីតាំង gradlew ពិតប្រាកដ រួច Build ពី Folder នោះផ្ទាល់ (ដោះស្រាយ does not contain a Gradle build)
+      # ៦. ដំណើរការ Compile Android APK តាមរយៈ Wrapper ដែលទើបបង្កើត
       - name: Execute Android Build
         run: |
-          GRADLEW_FILE=$(find . -name "gradlew" | head -n 1)
-          if [ -n "$GRADLEW_FILE" ]; then
-            PROJECT_DIR=$(dirname "$GRADLEW_FILE")
-            echo "Entering Android Project Directory: $PROJECT_DIR"
-            cd "$PROJECT_DIR"
-            chmod +x ./gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-          else
-            echo "Searching by build.gradle..."
-            BUILD_GRADLE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
-            PROJECT_DIR=$(dirname "$BUILD_GRADLE")
-            cd "$PROJECT_DIR"
-            chmod +x ./gradlew 2>/dev/null || true
-            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-          fi
+          ./gradlew assembleRelease --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
 
-      # ៥. បញ្ចេញឯកសារ APK គ្រប់ទីតាំងទាំងអស់
+      # ៧. បញ្ចេញឯកសារ APK
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
