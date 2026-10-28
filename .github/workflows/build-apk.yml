@@ -38,22 +38,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ជួសជុលបញ្ហា Exit Code 127 ដោយស្វែងរក ឬដំឡើង Gradle
-      - name: Setup Gradle Environment
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            echo "gradlew not found in root, searching subdirectories..."
-            GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-            if [ -n "$GRADLEW_PATH" ]; then
-              chmod +x "$GRADLEW_PATH"
-              cp "$GRADLEW_PATH" ./gradlew
-            else
-              echo "Installing standalone Gradle..."
-              sudo apt-get update && sudo apt-get install -y gradle
-            fi
-          fi
+      # ១. ជួសជុលសិទ្ធិ Gradlew
+      - name: Fix Permissions
+        run: chmod +x gradlew || true
 
       # ២. ទាញយករូប Logo (បើមាន)
       - name: Process Custom App Icon
@@ -73,21 +60,17 @@ jobs:
       # ៣. បញ្ចូល Website URL ទៅក្នុងកូដ
       - name: Inject Website URL
         run: |
-          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
+          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
 
-      # ៤. Build APK 
+      # ៤. Build APK ដោយបញ្ជាក់ Module :app (ដោះស្រាយបញ្ហា Task not found)
       - name: Execute Android Build
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            gradle assembleDebug --no-daemon --stacktrace
-          fi
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # ៥. Upload ឯកសារ APK
+      # ៥. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
-          path: "**/*.apk"
+          path: "**/build/outputs/apk/**/*.apk"
           if-no-files-found: ignore
