@@ -38,20 +38,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. រៀបចំ Android SDK និងទទួលស្គាល់ Licenses ដោយស្វ័យប្រវត្តិ
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ១. ទទួលស្គាល់ Android Licenses លើ SDK ដែលមានស្រាប់ក្នុងម៉ាស៊ីន (មិនប្រើ setup-android ដែលគាំង)
+      - name: Accept Android Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
       # ២. ដំឡើង Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ៣. ផ្ដល់សិទ្ធិប្រតិបត្តិ gradlew ប្រសិនបើមានក្នុងគម្រោង
+      # ៣. ផ្ដល់សិទ្ធិប្រតិបត្តិ gradlew
       - name: Prepare Wrapper
         run: |
           find . -name "gradlew" -exec chmod +x {} + 2>/dev/null || true
 
-      # ៤. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ៤. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដ
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -76,17 +77,17 @@ jobs:
             done
           done
 
-      # ៧. Compile Android APK (រត់ជាមួយ Android SDK ដែលទើបរៀបចំរួច)
+      # ៧. Compile APK
       - name: Execute Android Build
         run: |
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+            ./gradlew assembleDebug --no-daemon || ./gradlew assemble --no-daemon
           else
-            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
+            gradle assembleDebug --no-daemon || gradle assemble --no-daemon
           fi
 
-      # ៨. បញ្ចេញឯកសារ APK
-      - name: Upload Output Artifact
+      # ៨. Upload ឯកសារ APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
