@@ -38,7 +38,29 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ១. ដំឡើង Gradle Environment ផ្លូវការ
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # ២. បង្កើតឯកសារ settings.gradle បើគ្មានក្នុងគម្រោង (កម្ចាត់ does not contain a Gradle build)
+      - name: Ensure Settings & Wrapper Configuration
+        run: |
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+            echo "Generating root settings.gradle..."
+            echo "rootProject.name = 'x1One-App'" > settings.gradle
+            if [ -d "app" ]; then
+              echo "include ':app'" >> settings.gradle
+            fi
+          fi
+          
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper
+            chmod +x gradlew
+          else
+            chmod +x gradlew
+          fi
+
+      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -46,12 +68,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ២. កំណត់ឈ្មោះ App
+      # ៤. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
+      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -63,28 +85,13 @@ jobs:
             done
           done
 
-      # ៤. រកទីតាំង Folder ដែលផ្ទុក settings.gradle ពិតប្រាកដ រួច Build
+      # ៦. ដំណើរការ Compile APK
       - name: Execute Android Build
         run: |
-          # ស្វែងរកឯកសារ settings.gradle ជាគោលចម្បង
-          SETTINGS_FILE=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
-          
-          if [ -n "$SETTINGS_FILE" ]; then
-            ROOT_DIR=$(dirname "$SETTINGS_FILE")
-            echo "Entering Real Android Project Root: $ROOT_DIR"
-            cd "$ROOT_DIR"
-          fi
+          ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
 
-          # ផ្ដល់សិទ្ធិឱ្យ gradlew
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-          else
-            gradle :app:assembleDebug --no-daemon --stacktrace || gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
-          fi
-
-      # ៥. បញ្ចេញឯកសារ APK
-      - name: Upload Finished APK
+      # ៧. បញ្ចេញឯកសារ APK
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
