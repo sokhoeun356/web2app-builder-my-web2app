@@ -63,30 +63,24 @@ jobs:
             done
           done
 
-      # ៤. រកទីតាំងគម្រោង Android និងដំណើរការ Build ស្វ័យប្រវត្តិ
+      # ៤. រកទីតាំង Folder ដែលផ្ទុក settings.gradle ពិតប្រាកដ រួច Build
       - name: Execute Android Build
         run: |
-          # ស្វែងរកឯកសារ build.gradle ឬ settings.gradle
-          TARGET_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" | head -n 1)
-          if [ -n "$TARGET_FILE" ]; then
-            APP_DIR=$(dirname "$TARGET_FILE")
-            echo "Entering Directory: $APP_DIR"
-            cd "$APP_DIR"
+          # ស្វែងរកឯកសារ settings.gradle ជាគោលចម្បង
+          SETTINGS_FILE=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          
+          if [ -n "$SETTINGS_FILE" ]; then
+            ROOT_DIR=$(dirname "$SETTINGS_FILE")
+            echo "Entering Real Android Project Root: $ROOT_DIR"
+            cd "$ROOT_DIR"
           fi
 
-          # ស្វែងរក gradlew ក្នុង Folder នោះ ឬក្នុង Folder មេ
-          if [ ! -f "./gradlew" ]; then
-            G_PATH=$(find /home/runner/work -name "gradlew" | head -n 1)
-            [ -n "$G_PATH" ] && cp "$G_PATH" ./gradlew
-          fi
-
-          chmod +x ./gradlew 2>/dev/null || true
-
-          # ដំណើរការ Assemble តាម Task ពិតប្រាកដ
+          # ផ្ដល់សិទ្ធិឱ្យ gradlew
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease --no-daemon || ./gradlew assembleDebug --no-daemon || ./gradlew assemble --no-daemon
+            chmod +x ./gradlew
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
           else
-            gradle assembleRelease --no-daemon || gradle assembleDebug --no-daemon || gradle assemble --no-daemon
+            gradle :app:assembleDebug --no-daemon --stacktrace || gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
           fi
 
       # ៥. បញ្ចេញឯកសារ APK
