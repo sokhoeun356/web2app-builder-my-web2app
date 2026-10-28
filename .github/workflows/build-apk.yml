@@ -38,21 +38,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ទទួលស្គាល់ Android Licenses លើ SDK ដែលមានស្រាប់ក្នុងម៉ាស៊ីន (មិនប្រើ setup-android ដែលគាំង)
       - name: Accept Android Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. ដំឡើង Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ៣. ផ្ដល់សិទ្ធិប្រតិបត្តិ gradlew
-      - name: Prepare Wrapper
-        run: |
-          find . -name "gradlew" -exec chmod +x {} + 2>/dev/null || true
-
-      # ៤. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដ
+      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -60,12 +53,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ៥. កំណត់ឈ្មោះ App
+      # ២. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៦. ទាញយក និងប្តូររូប Logo App (បើមាន URL ផ្ញើមក)
+      # ៣. ទាញយក និងប្តូររូប Icon (បើមាន URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -77,19 +70,32 @@ jobs:
             done
           done
 
-      # ៧. Compile APK
+      # ៤. ស្វែងរកទីតាំងពិតប្រាកដនៃ Gradle Project ហើយ Compile ចេញពីទីតាំងនោះផ្ទាល់
       - name: Execute Android Build
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon || ./gradlew assemble --no-daemon
-          else
-            gradle assembleDebug --no-daemon || gradle assemble --no-daemon
+          # ស្វែងរកទីតាំង build.gradle ឬ settings.gradle
+          BUILD_FILE=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          if [ -n "$BUILD_FILE" ]; then
+            PROJECT_DIR=$(dirname "$BUILD_FILE")
+            echo "Found Android Project Directory at: $PROJECT_DIR"
+            cd "$PROJECT_DIR"
           fi
 
-      # ៨. Upload ឯកសារ APK
+          # ផ្ដល់សិទ្ធិឱ្យ gradlew បើមានក្នុង Folder នោះ
+          [ -f "./gradlew" ] && chmod +x ./gradlew
+
+          # ដំណើរការ Build ក្នុង Folder គម្រោងផ្ទាល់
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
+          fi
+
+      # ៥. Upload APK
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
           path: "**/*.apk"
           if-no-files-found: ignore
+
