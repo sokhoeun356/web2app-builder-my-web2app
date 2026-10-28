@@ -1,18 +1,32 @@
-name: x1One Ai Web2app - Build APK
+name: Build Android APK Web2App Engine
 
 on:
   workflow_dispatch:
     inputs:
       website_url:
-        description: "Website URL"
+        description: 'Clean Website URL'
         required: true
-        default: "https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
+      app_name:
+        description: 'Application Name'
+        required: true
+        default: 'x1One App'
+      icon_url:
+        description: 'App Icon Image URL'
+        required: true
+      bg_url:
+        description: 'Splash/Background Image URL'
+        required: false
+      is_free:
+        description: 'Has Company Banner (true/false)'
+        required: true
+        default: 'true'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -21,122 +35,69 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Gradle 8.5
-        shell: bash
+      - name: Install Image Processing & Utilities
+        run: sudo apt-get update && sudo apt-get install -y imagemagick curl
+
+      # ១. ទាញយករូបភាព Logo និងកែទំហំ Mipmap ស្វ័យប្រវត្តិ
+      - name: Process Custom App Logo
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-          unzip -q gradle-8.5-bin.zip
-          echo "$PWD/gradle-8.5/bin" >> $GITHUB_PATH
+          mkdir -p app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi
+          curl -L -o raw_logo.png "${{ github.event.inputs.icon_url }}"
+          convert raw_logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          convert raw_logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert raw_logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert raw_logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert raw_logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
 
-      - name: Create Web2App Project
-        shell: bash
+      # ២. ទាញយករូប Background (បើមាន)
+      - name: Process Background Splash Screen
+        if: "${{ github.event.inputs.bg_url != '' }}"
         run: |
-          set -e
-          mkdir -p app/src/main/java/com/x1oneai/web2app app/src/main/res/values
-          
-          cat << 'EOF' > settings.gradle
-          rootProject.name = "Web2App"
-          include ':app'
-          EOF
+          mkdir -p app/src/main/res/drawable
+          curl -L -o app/src/main/res/drawable/custom_background.png "${{ github.event.inputs.bg_url }}"
 
-          cat << 'EOF' > build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
-
-          cat << 'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              namespace 'com.x1oneai.web2app'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.x1oneai.web2app"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          EOF
-
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application
-                  android:label="x1One App"
-                  android:theme="@android:style/Theme.Light.NoTitleBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          cat << 'EOF' > app/src/main/java/com/x1oneai/web2app/MainActivity.java
-          package com.x1oneai.web2app;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-
-          public class MainActivity extends Activity {
-              private WebView webView;
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  webView = new WebView(this);
-                  setContentView(webView);
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("${{ inputs.website_url }}");
-              }
-              @Override
-              public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
-              }
-          }
-          EOF
-
-      - name: Build APK
-        shell: bash
+      # ៣. កំណត់ឈ្មោះ App និង Website URL
+      - name: Configure App Details
         run: |
-          gradle assembleDebug --no-daemon
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml || true
+          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" || true
 
-      - name: Upload APK
+      # ៤. គ្រប់គ្រង Logo Banner (Free vs Paid)
+      - name: Configure Banner Ad
+        run: |
+          if [ "${{ github.event.inputs.is_free }}" == "true" ]; then
+            find app/src/main/res/layout -name "*.xml" | xargs sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' || true
+          else
+            find app/src/main/res/layout -name "*.xml" | xargs sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' || true
+          fi
+
+      # ៥. កំណត់ប្រព័ន្ធត្រួតពិនិត្យ In-App Auto Update
+      - name: Enable Auto-Update Check
+        run: |
+          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i 's|ENABLE_AUTO_UPDATE = false|ENABLE_AUTO_UPDATE = true|g' || true
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Build Android Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload Output APK
         uses: actions/upload-artifact@v4
         with:
-          name: x1One-Web2App-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: "${{ github.event.inputs.app_name }}-Release"
+          path: app/build/outputs/apk/release/*.apk
 
+      # ៦. ប្រព័ន្ធផ្ដល់ដំណឹងស្វ័យប្រវត្តិតាម Telegram ពេល Build ចប់
+      - name: Send Notification on Success
+        if: success()
+        run: |
+          MESSAGE="✅ APK Web2App ត្រូវបាន Build ជោគជ័យ!%0A📱 ឈ្មោះ App: ${{ github.event.inputs.app_name }}%0A🌐 URL: ${{ github.event.inputs.website_url }}%0A📦 កញ្ចប់: ${{ github.event.inputs.is_free == 'true' && 'Free (មាន Banner)' || 'Pro (គ្មាន Banner)' }}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$MESSAGE" || true
