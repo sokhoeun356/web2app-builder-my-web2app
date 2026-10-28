@@ -8,17 +8,19 @@ on:
         required: true
       app_name:
         description: 'Application Name'
-        required: true
+        required: false
         default: 'x1One App'
       icon_url:
-        description: 'App Icon Image URL'
-        required: true
-      bg_url:
-        description: 'Splash/Background Image URL'
+        description: 'App Icon Image URL (Optional)'
         required: false
+        default: ''
+      bg_url:
+        description: 'Splash/Background Image URL (Optional)'
+        required: false
+        default: ''
       is_free:
         description: 'Has Company Banner (true/false)'
-        required: true
+        required: false
         default: 'true'
 
 jobs:
@@ -35,27 +37,32 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Image Processing & Utilities
+      - name: Install ImageMagick & Curl
         run: sudo apt-get update && sudo apt-get install -y imagemagick curl
 
-      # ១. ទាញយករូបភាព Logo និងកែទំហំ Mipmap ស្វ័យប្រវត្តិ
-      - name: Process Custom App Logo
+      # ១. ពិនិត្យមើលរូប Logo៖ បើមានបញ្ជូនមក ទើបដោនឡូត និងកែទំហំ បើអត់ទេ ប្រើរូបដើម
+      - name: Process Custom App Logo (If provided)
+        if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
           mkdir -p app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi
           curl -L -o raw_logo.png "${{ github.event.inputs.icon_url }}"
+          
+          # បម្លែងទំហំស្វ័យប្រវត្តិតាមស្តង់ដារ Android គ្រប់ Density
           convert raw_logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           convert raw_logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert raw_logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert raw_logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert raw_logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+          
+          # ចម្លងចូល round icon ផងដែរ
           cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
           cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
           cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
 
-      # ២. ទាញយករូប Background (បើមាន)
-      - name: Process Background Splash Screen
+      # ២. ទាញយករូប Background/Splash (បើមាន)
+      - name: Process Background Splash Screen (If provided)
         if: "${{ github.event.inputs.bg_url != '' }}"
         run: |
           mkdir -p app/src/main/res/drawable
@@ -76,11 +83,6 @@ jobs:
             find app/src/main/res/layout -name "*.xml" | xargs sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' || true
           fi
 
-      # ៥. កំណត់ប្រព័ន្ធត្រួតពិនិត្យ In-App Auto Update
-      - name: Enable Auto-Update Check
-        run: |
-          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i 's|ENABLE_AUTO_UPDATE = false|ENABLE_AUTO_UPDATE = true|g' || true
-
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
@@ -92,12 +94,3 @@ jobs:
         with:
           name: "${{ github.event.inputs.app_name }}-Release"
           path: app/build/outputs/apk/release/*.apk
-
-      # ៦. ប្រព័ន្ធផ្ដល់ដំណឹងស្វ័យប្រវត្តិតាម Telegram ពេល Build ចប់
-      - name: Send Notification on Success
-        if: success()
-        run: |
-          MESSAGE="✅ APK Web2App ត្រូវបាន Build ជោគជ័យ!%0A📱 ឈ្មោះ App: ${{ github.event.inputs.app_name }}%0A🌐 URL: ${{ github.event.inputs.website_url }}%0A📦 កញ្ចប់: ${{ github.event.inputs.is_free == 'true' && 'Free (មាន Banner)' || 'Pro (គ្មាន Banner)' }}"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MESSAGE" || true
