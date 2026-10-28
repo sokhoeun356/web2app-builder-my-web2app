@@ -56,7 +56,7 @@ jobs:
 
           touch app/proguard-rules.pro
 
-          # gradle.properties (ដោះស្រាយកង្វះ AndroidX និង Jetifier)
+          # gradle.properties
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
@@ -183,7 +183,7 @@ jobs:
           </resources>
           EOF
 
-          # activity_main.xml
+          # activity_main.xml (មាន WebView, Banner, និង Loading Spinner Overlay)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -208,24 +208,53 @@ jobs:
                   android:textColor="#FFFFFF"
                   android:textSize="12sp"
                   android:visibility="gone" />
+
+              <!-- Animated Loading Spinner Overlay -->
+              <LinearLayout
+                  android:id="@+id/layoutLoading"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:orientation="vertical"
+                  android:gravity="center"
+                  android:background="#0F172A"
+                  android:visibility="visible">
+
+                  <ProgressBar
+                      android:layout_width="56dp"
+                      android:layout_height="56dp"
+                      android:indeterminate="true"
+                      android:indeterminateTint="#84CC16" />
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="16dp"
+                      android:text="Loading..."
+                      android:textColor="#94A3B8"
+                      android:textSize="14sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
           </RelativeLayout>
           EOF
 
-          # MainActivity.java
+          # MainActivity.java (មាន WebSettings, Auto-hide Loading Spinner, និង Banner logic)
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
           import android.annotation.SuppressLint;
+          import android.graphics.Bitmap;
           import android.os.Bundle;
           import android.view.View;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import android.widget.LinearLayout;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
+              private LinearLayout layoutLoading;
               private static final String APP_URL = "URL_INJECT_POINT";
               private static final boolean SHOW_BANNER = BANNER_INJECT_POINT;
 
@@ -236,6 +265,7 @@ jobs:
                   setContentView(R.layout.activity_main);
 
                   webView = findViewById(R.id.webView);
+                  layoutLoading = findViewById(R.id.layoutLoading);
                   TextView bannerView = findViewById(R.id.bannerView);
 
                   if (SHOW_BANNER) {
@@ -251,7 +281,20 @@ jobs:
                   settings.setUseWideViewPort(true);
                   settings.setLoadWithOverviewMode(true);
 
-                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                          super.onPageStarted(view, url, favicon);
+                          layoutLoading.setVisibility(View.VISIBLE);
+                      }
+
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          layoutLoading.setVisibility(View.GONE);
+                      }
+                  });
+
                   webView.loadUrl(APP_URL);
               }
 
@@ -282,21 +325,36 @@ jobs:
           sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. រៀបចំរូបតំណាង Icon x1One
+      # ៤. រៀបចំ App Icon (Upload File ឬ Paste Link ទៅផ្លូវតែមួយ)
       - name: Setup App Icon
         run: |
-          # ទាញយករូប Icon បើមានបញ្ចូល ឬប្រើ Icon ស្វ័យប្រវត្តិ
           ICON_URL="${{ github.event.inputs.icon_url }}"
+          
+          # ប្រសិនបើមានបញ្ចូល Link URL តាមប្រអប់ input
           if [ -n "$ICON_URL" ]; then
-            curl -sL "$ICON_URL" -o /tmp/downloaded_icon.png || true
+            echo "Fetching icon from URL: $ICON_URL"
+            curl -sL "$ICON_URL" -o /tmp/chosen_icon.png || true
           fi
 
-          if [ ! -s /tmp/downloaded_icon.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > /tmp/downloaded_icon.png
+          # បើគ្មាន Link ឬទាញយកមិនបាន ពិនិត្យមើលឯកសារ Upload ក្នុង repo (app_icon.png ឬ logo.png)
+          if [ ! -s /tmp/chosen_icon.png ]; then
+            UPLOADED_ICON=$(find . -maxdepth 2 -type f \( -name "*icon*.png" -o -name "*logo*.png" -o -name "app_icon.*" \) | head -n 1)
+            if [ -n "$UPLOADED_ICON" ]; then
+              echo "Using uploaded icon file: $UPLOADED_ICON"
+              cp "$UPLOADED_ICON" /tmp/chosen_icon.png
+            fi
           fi
 
+          # បើនៅតែគ្មានទៀត ប្រើ default fallback មិនឱ្យ error
+          if [ ! -s /tmp/chosen_icon.png ]; then
+            echo "Generating fallback icon"
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > /tmp/chosen_icon.png
+          fi
+
+          # បញ្ចូលរូប Icon ទៅក្នុងគ្រប់ទំហំ mipmap
           for dir in app/src/main/res/mipmap-*; do
-            cp /tmp/downloaded_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+            cp /tmp/chosen_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+            cp /tmp/chosen_icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
           done
 
       # ៥. ដំឡើង Gradle និងដំណើរការ Assemble APK
