@@ -38,11 +38,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ជួសជុលសិទ្ធិ Gradlew
-      - name: Fix Permissions
-        run: chmod +x gradlew || true
+      # ដំឡើង Gradle និង Android SDK ដោយផ្ទាល់ (ដោះស្រាយបញ្ហា ./gradlew: No such file)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      # ២. ទាញយករូប Logo (បើមាន)
+      # ១. ទាញយករូប Logo (បើមាន)
       - name: Process Custom App Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -57,17 +57,22 @@ jobs:
           cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
           cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
 
-      # ៣. បញ្ចូល Website URL ទៅក្នុងកូដ
+      # ២. បញ្ចូល Website URL ទៅក្នុងកូដ
       - name: Inject Website URL
         run: |
-          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
 
-      # ៤. Build APK ដោយបញ្ជាក់ Module :app (ដោះស្រាយបញ្ហា Task not found)
+      # ៣. Build Android APK ដោយប្រើ Gradle Action ផ្ទាល់
       - name: Execute Android Build
         run: |
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            gradle :app:assembleDebug --no-daemon --stacktrace || gradle assembleDebug --no-daemon --stacktrace
+          fi
 
-      # ៥. បញ្ចេញឯកសារ APK
+      # ៤. Upload ឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
