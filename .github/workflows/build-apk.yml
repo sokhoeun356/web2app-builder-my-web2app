@@ -38,19 +38,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android SDK (ដោះស្រាយ Exit Code 1)
+      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android SDK
       - name: Accept Android Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. រៀបចំគ្រោងគម្រោង Native Web2App ពេញលេញ
+      # ២. រៀបចំរចនាសម្ព័ន្ធ Project Android WebView ស្តង់ដារពេញលេញ
       - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap
 
           # settings.gradle
           cat << 'EOF' > settings.gradle
@@ -144,11 +143,23 @@ jobs:
           </manifest>
           EOF
 
-          # styles.xml & strings.xml
+          # colors.xml & styles.xml & strings.xml
+          cat << 'EOF' > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.Web2App" parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="android:windowBackground">#FFFFFF</item>
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
               </style>
           </resources>
           EOF
@@ -159,7 +170,7 @@ jobs:
           </resources>
           EOF
 
-          # Default Vector Logo
+          # Default Icon
           cat << 'EOF' > app/src/main/res/drawable/ic_app_logo.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp"
@@ -172,7 +183,7 @@ jobs:
           </vector>
           EOF
 
-          # activity_main.xml (មាន WebView និង Banner)
+          # Layout XML
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -215,8 +226,8 @@ jobs:
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
-              private static final String DEFAULT_URL = "TARGET_URL_PLACEHOLDER";
-              private static final boolean IS_FREE = BANNER_BOOLEAN_PLACEHOLDER;
+              private static final String APP_URL = "URL_INJECT_POINT";
+              private static final boolean SHOW_BANNER = BANNER_INJECT_POINT;
 
               @SuppressLint("SetJavaScriptEnabled")
               @Override
@@ -227,7 +238,7 @@ jobs:
                   webView = findViewById(R.id.webView);
                   TextView bannerView = findViewById(R.id.bannerView);
 
-                  if (IS_FREE) {
+                  if (SHOW_BANNER) {
                       bannerView.setVisibility(View.VISIBLE);
                   } else {
                       bannerView.setVisibility(View.GONE);
@@ -241,7 +252,7 @@ jobs:
                   settings.setLoadWithOverviewMode(true);
 
                   webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl(DEFAULT_URL);
+                  webView.loadUrl(APP_URL);
               }
 
               @Override
@@ -255,7 +266,7 @@ jobs:
           }
           EOF
 
-      # ៣. បញ្ចូលទិន្នន័យថ្មីដែលអ្នកចង់បន្ថែម (Target URL, App Name, Banner Free/Paid)
+      # ៣. បញ្ចូល Target URL, App Name, និង Banner Logic
       - name: Inject Custom Parameters
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -267,16 +278,11 @@ jobs:
           IS_FREE_VAL="${{ github.event.inputs.is_free }}"
           [ -z "$IS_FREE_VAL" ] && IS_FREE_VAL="true"
 
-          # ជំនួស URL ទៅក្នុងកូដ Java
-          sed -i "s|TARGET_URL_PLACEHOLDER|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
-          
-          # ជំនួស Banner (true/false)
-          sed -i "s|BANNER_BOOLEAN_PLACEHOLDER|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
-          
-          # ជំនួស App Name ទៅក្នុង strings.xml
+          sed -i "s|URL_INJECT_POINT|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. ទាញយករូបភាព Icon ថ្មី (បើមានបញ្ចូល URL)
+      # ៤. ទាញយក Icon ថ្មី (បើមាន)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -290,9 +296,9 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      # ៦. បញ្ចេញឯកសារ APK ជាផ្លូវការ
+      # ៦. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
