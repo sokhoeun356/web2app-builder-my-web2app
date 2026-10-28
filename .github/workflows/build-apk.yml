@@ -38,64 +38,247 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. រៀបចំ Android SDK Location និងទទួល Licenses
-      - name: Configure Android SDK Environment
+      # ១. បង្កើតរចនាសម្ព័ន្ធគម្រោង Android WebView Engine ពេញលេញដោយស្វ័យប្រវត្តិ
+      - name: Scaffold Native Android Web2App Project
         run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          mkdir -p app/src/main/java/com/x1one/web2app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      # ២. ដំឡើង Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+          # បង្កើត settings.gradle
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Web2AppEngine"
+          include ':app'
+          EOF
 
-      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
-      - name: Inject Target URL
+          # បង្កើត Root build.gradle
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          # បង្កើត app/build.gradle
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.x1one.web2app'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.x1one.web2app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          # បង្កើត AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # បង្កើត Layout (XML) មានភ្ជាប់ WebView និង Conditional Banner
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+
+              <WebView
+                  android:id="@+id/webView"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:layout_above="@+id/bannerView" />
+
+              <TextView
+                  android:id="@+id/bannerView"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_alignParentBottom="true"
+                  android:background="#222222"
+                  android:gravity="center"
+                  android:padding="8dp"
+                  android:text="Free Version • Powered by x1One"
+                  android:textColor="#FFFFFF"
+                  android:textSize="12sp"
+                  android:visibility="gone" />
+          </RelativeLayout>
+          EOF
+
+          # បង្កើត strings.xml
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">x1One App</string>
+          </resources>
+          EOF
+
+          # បង្កើត MainActivity.java (មាន WebSettings, JavaScript, Back button support, និង Banner logic)
+          cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
+          package com.x1one.web2app;
+
+          import android.annotation.SuppressLint;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+              private static final String TARGET_URL = "https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app";
+              private static final boolean IS_FREE = true;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  webView = findViewById(R.id.webView);
+                  TextView bannerView = findViewById(R.id.bannerView);
+
+                  if (IS_FREE) {
+                      bannerView.setVisibility(View.VISIBLE);
+                  } else {
+                      bannerView.setVisibility(View.GONE);
+                  }
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setUseWideViewPort(true);
+                  settings.setLoadWithOverviewMode(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl(TARGET_URL);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      # ២. បញ្ចូល Target URL, App Name, និង Banner Logic របស់អ្នក
+      - name: Inject Configuration (URL, Name, Banner)
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
           [ -z "$TARGET_URL" ] && TARGET_URL="https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
-          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
-          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
+          
+          # Inject Target URL
+          sed -i "s|https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          
+          # Inject App Name
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          [ -z "$APP_NAME" ] && APP_NAME="x1One App"
+          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
+          
+          # Inject Banner (Free vs Paid)
+          IS_FREE="${{ github.event.inputs.is_free }}"
+          if [ "$IS_FREE" = "false" ]; then
+            sed -i "s|private static final boolean IS_FREE = true;|private static final boolean IS_FREE = false;|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          fi
 
-      # ៤. កំណត់ឈ្មោះ App
-      - name: Configure App Name
-        run: |
-          find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
-
-      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
+      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL ផ្ញើមក)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/logo.png || true
-          find . -type d -name "res" | while read resdir; do
-            for dir in "$resdir"/mipmap-*; do
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher.png" 2>/dev/null || true
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/custom_icon.png || true
+          if [ -s /tmp/custom_icon.png ]; then
+            for dir in app/src/main/res/mipmap-*; do
+              cp /tmp/custom_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
             done
-          done
+          fi
 
-      # ៦. ធានាការកំណត់ Settings និងរត់ Build APK
-      - name: Execute Android Build
+      # ៤. ដំឡើង Gradle និងបង្កើត Wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Android APK
         run: |
-          # ប្រសិនបើគ្មាន settings.gradle យើងបង្កើត settings ស្តង់ដារ
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "include ':app'" > settings.gradle
-          fi
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-          # បង្កើត gradlew ប្រសិនបើមិនទាន់មាន
-          if [ ! -f "./gradlew" ]; then
-            gradle wrapper --gradle-version 8.2
-            chmod +x gradlew
-          else
-            chmod +x gradlew
-          fi
-
-          # បញ្ជា compile APK
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-
-      # ៧. បញ្ចេញឯកសារ APK
+      # ៥. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
-          path: "**/*.apk"
-          if-no-files-found: ignore
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
