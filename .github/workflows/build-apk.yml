@@ -38,9 +38,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android
-      - name: Accept Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+      # ១. រៀបចំ Android SDK Location និងទទួល Licenses
+      - name: Configure Android SDK Environment
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
       # ២. ដំឡើង Gradle
       - name: Setup Gradle
@@ -71,12 +73,24 @@ jobs:
             done
           done
 
-      # ៦. បង្កើត gradlew និងដំណើរការ Compile APK
+      # ៦. ធានាការកំណត់ Settings និងរត់ Build APK
       - name: Execute Android Build
         run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          # ប្រសិនបើគ្មាន settings.gradle យើងបង្កើត settings ស្តង់ដារ
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+            echo "include ':app'" > settings.gradle
+          fi
+
+          # បង្កើត gradlew ប្រសិនបើមិនទាន់មាន
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 8.2
+            chmod +x gradlew
+          else
+            chmod +x gradlew
+          fi
+
+          # បញ្ជា compile APK
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
 
       # ៧. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
