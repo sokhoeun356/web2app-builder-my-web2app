@@ -38,73 +38,32 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android SDK
-      - name: Accept Android Licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android
+      - name: Accept Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. ដំឡើងបរិស្ថាន Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      # ៣. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដ
+      # ២. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
           [ -z "$TARGET_URL" ] && TARGET_URL="https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
-          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ៤. កំណត់ឈ្មោះ App
-      - name: Configure App Name
-        run: |
-          find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
-
-      # ៥. ទាញយក និងប្តូររូប Logo App (បើមាន URL)
-      - name: Process Custom Icon
-        if: "${{ github.event.inputs.icon_url != '' }}"
-        run: |
-          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/logo.png || true
-          find . -type d -name "res" | while read resdir; do
-            for dir in "$resdir"/mipmap-*; do
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher.png" 2>/dev/null || true
-              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher_round.png" 2>/dev/null || true
-            done
-          done
-
-      # ៦. រៀបចំ Settings ពេញលេញ និងដំណើរការ Build
+      # ៣. ស្វែងរកទីតាំង gradlew រួច Build ចេញជា APK ផ្ទាល់
       - name: Execute Android Build
         run: |
-          # ប្រសិនបើគ្មាន settings.gradle យើងបង្កើត settings ពេញលេញដែលមាន Repository ត្រឹមត្រូវ
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            cat << 'EOF' > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "x1One-App"
-          include ':app'
-          EOF
+          # ស្វែងរកទីតាំង gradlew ក្នុង repository
+          GW_PATH=$(find . -name "gradlew" | head -n 1)
+          if [ -n "$GW_PATH" ]; then
+            cd "$(dirname "$GW_PATH")"
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon || ./gradlew assemble --no-daemon
+          else
+            chmod +x gradlew 2>/dev/null || true
+            ./gradlew assembleDebug --no-daemon || ./gradlew assemble --no-daemon
           fi
 
-          # បង្កើត Gradle Wrapper 8.2 ស្តង់ដារ
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-
-          # ដំណើរការ Assemble APK
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace || ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-
-      # ៧. បញ្ចេញឯកសារ APK
+      # ៤. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
