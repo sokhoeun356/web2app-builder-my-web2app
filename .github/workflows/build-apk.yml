@@ -38,7 +38,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ទាញយករូប Logo (បើមាន)
+      # ១. ជួសជុលបញ្ហា Exit Code 127 ដោយស្វែងរក ឬដំឡើង Gradle
+      - name: Setup Gradle Environment
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            echo "gradlew not found in root, searching subdirectories..."
+            GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+            if [ -n "$GRADLEW_PATH" ]; then
+              chmod +x "$GRADLEW_PATH"
+              cp "$GRADLEW_PATH" ./gradlew
+            else
+              echo "Installing standalone Gradle..."
+              sudo apt-get update && sudo apt-get install -y gradle
+            fi
+          fi
+
+      # ២. ទាញយករូប Logo (បើមាន)
       - name: Process Custom App Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -53,26 +70,24 @@ jobs:
           cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
           cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
 
-      # ២. បញ្ចូល Website URL ទៅក្នុងកូដដើម
+      # ៣. បញ្ចូល Website URL ទៅក្នុងកូដ
       - name: Inject Website URL
         run: |
-          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + 2>/dev/null || true
 
-      # ៣. កំណត់សិទ្ធិ Gradlew
-      - name: Fix Permissions
+      # ៤. Build APK 
+      - name: Execute Android Build
         run: |
-          chmod +x gradlew || true
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace
+          fi
 
-      # ៤. Compile APK (ប្រើ assembleDebug ដែលមិនទាមទារ Keystore Key ធានាថាកើត ១០០%)
-      - name: Build Android APK
-        run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
-
-      # ៥. Upload APK (ស្វែងរកគ្រប់ទីតាំង .apk ទាំងអស់ ការពារកុំឱ្យ Error រកឯកសារមិនឃើញ)
-      - name: Upload Finished APK
+      # ៥. Upload ឯកសារ APK
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
           path: "**/*.apk"
           if-no-files-found: ignore
-
