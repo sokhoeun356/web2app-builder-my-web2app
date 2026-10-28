@@ -43,16 +43,17 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. បង្កើតរចនាសម្ព័ន្ធ Project Android ពេញលេញ និងត្រឹមត្រូវតាមស្តង់ដារ Google
+      # ២. បង្កើតរចនាសម្ព័ន្ធ Project Android ពេញលេញ
       - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
           touch app/proguard-rules.pro
 
@@ -128,7 +129,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
+          # AndroidManifest.xml (ភ្ជាប់ Icon និង Round Icon)
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -139,7 +140,7 @@ jobs:
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="@string/app_name"
-                  android:roundIcon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.Web2App"
                   android:usesCleartextTraffic="true">
@@ -156,7 +157,7 @@ jobs:
           </manifest>
           EOF
 
-          # values XML files
+          # values files
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -237,7 +238,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # MainActivity.java (មាន WebSettings, Auto-hide Loading Spinner, និង Banner logic)
+          # MainActivity.java (គ្រប់គ្រង Loading Spinner និង Banner)
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
@@ -325,36 +326,32 @@ jobs:
           sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. រៀបចំ App Icon (Upload File ឬ Paste Link ទៅផ្លូវតែមួយ)
+      # ៤. រៀបចំ App Icon (ទទួលទាំង Base64, URL និងរូប x1One ដើម)
       - name: Setup App Icon
         run: |
-          ICON_URL="${{ github.event.inputs.icon_url }}"
-          
-          # ប្រសិនបើមានបញ្ចូល Link URL តាមប្រអប់ input
-          if [ -n "$ICON_URL" ]; then
-            echo "Fetching icon from URL: $ICON_URL"
-            curl -sL "$ICON_URL" -o /tmp/chosen_icon.png || true
+          RAW_ICON="${{ github.event.inputs.icon_url }}"
+
+          # ប្រសិនបើជា Base64 Data URL (data:image/...;base64,xxxx)
+          if echo "$RAW_ICON" | grep -q "base64,"; then
+            echo "$RAW_ICON" | sed 's/^data:image\/[a-z]*;base64,//' | base64 -d > /tmp/final_icon.png 2>/dev/null || true
+          elif [ -n "$RAW_ICON" ] && echo "$RAW_ICON" | grep -q "^http"; then
+            curl -sL "$RAW_ICON" -o /tmp/final_icon.png || true
           fi
 
-          # បើគ្មាន Link ឬទាញយកមិនបាន ពិនិត្យមើលឯកសារ Upload ក្នុង repo (app_icon.png ឬ logo.png)
-          if [ ! -s /tmp/chosen_icon.png ]; then
-            UPLOADED_ICON=$(find . -maxdepth 2 -type f \( -name "*icon*.png" -o -name "*logo*.png" -o -name "app_icon.*" \) | head -n 1)
-            if [ -n "$UPLOADED_ICON" ]; then
-              echo "Using uploaded icon file: $UPLOADED_ICON"
-              cp "$UPLOADED_ICON" /tmp/chosen_icon.png
-            fi
+          # ប្រសិនបើគ្មាន ឬទាញយកមិនបាន ប្រើប្រាស់រូប x1One HD ផ្លូវការដោយផ្ទាល់
+          if [ ! -s /tmp/final_icon.png ]; then
+            curl -sL "https://raw.githubusercontent.com/sokhoeun356/web2app-builder-my-web2app/main/app_icon.png" -o /tmp/final_icon.png 2>/dev/null || true
           fi
 
-          # បើនៅតែគ្មានទៀត ប្រើ default fallback មិនឱ្យ error
-          if [ ! -s /tmp/chosen_icon.png ]; then
-            echo "Generating fallback icon"
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > /tmp/chosen_icon.png
+          # បើនៅតែគ្មានទៀត ទាញយករូប Logo x1One ពិតប្រាកដពីប្រភពផ្ទាល់
+          if [ ! -s /tmp/final_icon.png ]; then
+            curl -sL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/final_icon.png || true
           fi
 
-          # បញ្ចូលរូប Icon ទៅក្នុងគ្រប់ទំហំ mipmap
+          # ចម្លងចូលគ្រប់ mipmap ទាំង icon ធម្មតា និង icon មូល (ic_launcher_round)
           for dir in app/src/main/res/mipmap-*; do
-            cp /tmp/chosen_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
-            cp /tmp/chosen_icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+            cp /tmp/final_icon.png "$dir/ic_launcher.png"
+            cp /tmp/final_icon.png "$dir/ic_launcher_round.png"
           done
 
       # ៥. ដំឡើង Gradle និងដំណើរការ Assemble APK
