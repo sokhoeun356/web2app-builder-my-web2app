@@ -38,19 +38,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. បង្កើតរចនាសម្ព័ន្ធគម្រោង Android WebView Engine ពេញលេញដោយស្វ័យប្រវត្តិ
-      - name: Scaffold Native Android Web2App Project
+      # ១. ទទួលស្គាល់អាជ្ញាប័ណ្ណ Android SDK (ដោះស្រាយ Exit Code 1)
+      - name: Accept Android Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+
+      # ២. រៀបចំគ្រោងគម្រោង Native Web2App ពេញលេញ
+      - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap
 
-          # បង្កើត settings.gradle
+          # settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -70,14 +72,14 @@ jobs:
           include ':app'
           EOF
 
-          # បង្កើត Root build.gradle
+          # Root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # បង្កើត app/build.gradle
+          # app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -98,10 +100,9 @@ jobs:
               buildTypes {
                   release {
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
                   debug {
-                      debuggable true
+                      minifyEnabled false
                   }
               }
               compileOptions {
@@ -112,11 +113,10 @@ jobs:
 
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
 
-          # បង្កើត AndroidManifest.xml
+          # AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -125,11 +125,11 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
+                  android:icon="@drawable/ic_app_logo"
                   android:label="@string/app_name"
-                  android:roundIcon="@mipmap/ic_launcher"
+                  android:roundIcon="@drawable/ic_app_logo"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+                  android:theme="@style/Theme.Web2App"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
@@ -144,7 +144,35 @@ jobs:
           </manifest>
           EOF
 
-          # បង្កើត Layout (XML) មានភ្ជាប់ WebView និង Conditional Banner
+          # styles.xml & strings.xml
+          cat << 'EOF' > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.Web2App" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="android:windowBackground">#FFFFFF</item>
+              </style>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">x1One App</string>
+          </resources>
+          EOF
+
+          # Default Vector Logo
+          cat << 'EOF' > app/src/main/res/drawable/ic_app_logo.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#3DDC84"
+                  android:pathData="M0,0h108v108h-108z"/>
+          </vector>
+          EOF
+
+          # activity_main.xml (មាន WebView និង Banner)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -172,14 +200,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # បង្កើត strings.xml
-          cat << 'EOF' > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">x1One App</string>
-          </resources>
-          EOF
-
-          # បង្កើត MainActivity.java (មាន WebSettings, JavaScript, Back button support, និង Banner logic)
+          # MainActivity.java
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
@@ -194,8 +215,8 @@ jobs:
 
           public class MainActivity extends AppCompatActivity {
               private WebView webView;
-              private static final String TARGET_URL = "https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app";
-              private static final boolean IS_FREE = true;
+              private static final String DEFAULT_URL = "TARGET_URL_PLACEHOLDER";
+              private static final boolean IS_FREE = BANNER_BOOLEAN_PLACEHOLDER;
 
               @SuppressLint("SetJavaScriptEnabled")
               @Override
@@ -220,7 +241,7 @@ jobs:
                   settings.setLoadWithOverviewMode(true);
 
                   webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl(TARGET_URL);
+                  webView.loadUrl(DEFAULT_URL);
               }
 
               @Override
@@ -234,38 +255,34 @@ jobs:
           }
           EOF
 
-      # ២. បញ្ចូល Target URL, App Name, និង Banner Logic របស់អ្នក
-      - name: Inject Configuration (URL, Name, Banner)
+      # ៣. បញ្ចូលទិន្នន័យថ្មីដែលអ្នកចង់បន្ថែម (Target URL, App Name, Banner Free/Paid)
+      - name: Inject Custom Parameters
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
           [ -z "$TARGET_URL" ] && TARGET_URL="https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
           
-          # Inject Target URL
-          sed -i "s|https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
-          
-          # Inject App Name
           APP_NAME="${{ github.event.inputs.app_name }}"
           [ -z "$APP_NAME" ] && APP_NAME="x1One App"
-          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
           
-          # Inject Banner (Free vs Paid)
-          IS_FREE="${{ github.event.inputs.is_free }}"
-          if [ "$IS_FREE" = "false" ]; then
-            sed -i "s|private static final boolean IS_FREE = true;|private static final boolean IS_FREE = false;|g" app/src/main/java/com/x1one/web2app/MainActivity.java
-          fi
+          IS_FREE_VAL="${{ github.event.inputs.is_free }}"
+          [ -z "$IS_FREE_VAL" ] && IS_FREE_VAL="true"
 
-      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន URL ផ្ញើមក)
+          # ជំនួស URL ទៅក្នុងកូដ Java
+          sed -i "s|TARGET_URL_PLACEHOLDER|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          
+          # ជំនួស Banner (true/false)
+          sed -i "s|BANNER_BOOLEAN_PLACEHOLDER|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          
+          # ជំនួស App Name ទៅក្នុង strings.xml
+          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
+
+      # ៤. ទាញយករូបភាព Icon ថ្មី (បើមានបញ្ចូល URL)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/custom_icon.png || true
-          if [ -s /tmp/custom_icon.png ]; then
-            for dir in app/src/main/res/mipmap-*; do
-              cp /tmp/custom_icon.png "$dir/ic_launcher.png" 2>/dev/null || true
-            done
-          fi
+          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/drawable/ic_app_logo.png || true
 
-      # ៤. ដំឡើង Gradle និងបង្កើត Wrapper
+      # ៥. ដំឡើង Gradle និងដំណើរការ Assemble APK
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
@@ -275,7 +292,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      # ៥. បញ្ចេញឯកសារ APK
+      # ៦. បញ្ចេញឯកសារ APK ជាផ្លូវការ
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
