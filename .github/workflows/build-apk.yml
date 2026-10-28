@@ -38,10 +38,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # ១. រៀបចំ Android SDK និងទទួលស្គាល់ Licenses ដោយស្វ័យប្រវត្តិ
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ២. ដំឡើង Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
+      # ៣. ផ្ដល់សិទ្ធិប្រតិបត្តិ gradlew ប្រសិនបើមានក្នុងគម្រោង
+      - name: Prepare Wrapper
+        run: |
+          find . -name "gradlew" -exec chmod +x {} + 2>/dev/null || true
+
+      # ៤. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -49,12 +59,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ២. កំណត់ឈ្មោះ App
+      # ៥. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន)
+      # ៦. ទាញយក និងប្តូររូប Logo App (បើមាន URL ផ្ញើមក)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -66,12 +76,16 @@ jobs:
             done
           done
 
-      # ៤. ដំណើរការ Compile APK តាមក្បួនទូទៅ (ការពារគ្រប់ Task ទាំងអស់)
+      # ៧. Compile Android APK (រត់ជាមួយ Android SDK ដែលទើបរៀបចំរួច)
       - name: Execute Android Build
         run: |
-          gradle assemble -x test --no-daemon --stacktrace || gradle build -x test --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
+          fi
 
-      # ៥. បញ្ចេញឯកសារ APK
+      # ៨. បញ្ចេញឯកសារ APK
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
