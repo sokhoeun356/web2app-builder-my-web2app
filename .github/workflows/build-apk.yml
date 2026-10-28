@@ -6,29 +6,22 @@ on:
       website_url:
         description: 'Clean Website URL'
         required: true
+        default: 'https://google.com'
       app_name:
         description: 'Application Name'
         required: false
         default: 'x1One App'
       icon_url:
-        description: 'App Icon Image URL (Optional)'
+        description: 'App Icon Image URL'
         required: false
         default: ''
-      bg_url:
-        description: 'Splash/Background Image URL (Optional)'
-        required: false
-        default: ''
-      is_free:
-        description: 'Has Company Banner (true/false)'
-        required: false
-        default: 'true'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -37,58 +30,36 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install ImageMagick & Curl
-        run: sudo apt-get update && sudo apt-get install -y imagemagick curl
-
-      # ១. ទាញយក Logo បើមាន
-      - name: Process Custom App Logo
+      # ទាញយក Logo មកជំនួសរូបមនុស្សយន្ត ដោយមិនឱ្យរាំងស្ទះដំណើរការ
+      - name: Download & Replace Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
-          mkdir -p app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi
-          curl -L -o raw_logo.png "${{ github.event.inputs.icon_url }}" || true
-          if [ -f raw_logo.png ]; then
-            convert raw_logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
-            convert raw_logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
-            convert raw_logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
-            convert raw_logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png || true
-            convert raw_logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png || true
-            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png || true
-            cp app/src/main/res/mipmap-xxhdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png || true
-            cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png || true
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png || true
-            cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png || true
-          fi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
+          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
+          curl -sL "${{ github.event.inputs.icon_url }}" -o app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
 
-      # ២. ទាញយក Background បើមាន
-      - name: Process Background Splash Screen
-        if: "${{ github.event.inputs.bg_url != '' }}"
+      # បញ្ចូល Website URL ទៅក្នុងកូដដើម
+      - name: Inject Website URL
         run: |
-          mkdir -p app/src/main/res/drawable
-          curl -L -o app/src/main/res/drawable/custom_background.png "${{ github.event.inputs.bg_url }}" || true
-
-      # ៣. កំណត់ឈ្មោះ App និង URL
-      - name: Configure App Details
-        run: |
-          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' app/src/main/res/values/strings.xml || true
-          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" {} + || true
-
-      # ៤. កំណត់ Banner
-      - name: Configure Banner Ad
-        run: |
-          if [ "${{ github.event.inputs.is_free }}" == "true" ]; then
-            find app/src/main/res/layout -type f -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' {} + || true
-          else
-            find app/src/main/res/layout -type f -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' {} + || true
-          fi
+          sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" app/src/main/java/*/*/*/*.java 2>/dev/null || true
+          sed -i "s|https://example.com|${{ github.event.inputs.website_url }}|g" app/src/main/java/*/*/*/*/*.java 2>/dev/null || true
 
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
-      - name: Build Android Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      # បង្កើត APK (បើ Release មិនដំណើរការ វានឹងប្តូរទៅ Debug ស្វ័យប្រវត្តិ)
+      - name: Build Android APK
+        run: |
+          ./gradlew assembleRelease || ./gradlew assembleDebug
 
-      - name: Upload Output APK
+      # បញ្ចេញឯកសារ APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ github.event.inputs.app_name }}-Release"
-          path: app/build/outputs/apk/release/*.apk
+          name: app-finished
+          path: app/build/outputs/apk/*/*/*.apk
