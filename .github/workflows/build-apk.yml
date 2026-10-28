@@ -38,11 +38,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ដំឡើងបរិស្ថាន Gradle ផ្លូវការ (ការពារ Exit Code 127 ដោយស្វ័យប្រវត្តិ)
-      - name: Setup Official Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដ Android
+      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដដើម
       - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -50,12 +49,12 @@ jobs:
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
           find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ២. កំណត់ឈ្មោះកម្មវិធី App Name
+      # ២. កំណត់ឈ្មោះ App
       - name: Configure App Name
         run: |
           find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៣. ទាញយក និងប្តូររូប Icon (បើមាន URL)
+      # ៣. ទាញយក និងប្តូររូប Logo App (បើមាន)
       - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
@@ -67,18 +66,13 @@ jobs:
             done
           done
 
-      # ៤. ដំណើរការ Compile APK (ប្រើ gradle ផ្ទាល់ មិនឱ្យគាំង Exit code 127 ទៀតឡើយ)
+      # ៤. ដំណើរការ Compile APK តាមក្បួនទូទៅ (ការពារគ្រប់ Task ទាំងអស់)
       - name: Execute Android Build
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
-          else
-            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
-          fi
+          gradle assemble -x test --no-daemon --stacktrace || gradle build -x test --no-daemon --stacktrace
 
-      # ៥. Upload ឯកសារ APK
-      - name: Upload Finished APK
+      # ៥. បញ្ចេញឯកសារ APK
+      - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
