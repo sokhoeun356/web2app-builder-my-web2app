@@ -38,57 +38,49 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ១. ផ្ដល់សិទ្ធិប្រតិបត្តិ gradlew
-      - name: Grant Execute Permission
-        run: chmod +x gradlew || true
+      # ដំឡើងបរិស្ថាន Gradle ផ្លូវការ (ការពារ Exit Code 127 ដោយស្វ័យប្រវត្តិ)
+      - name: Setup Official Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      # ២. បញ្ចូល និងកំណត់ឱ្យស្គាល់ URL របស់អ្នកទៅគ្រប់ទីកន្លែងក្នុងគម្រោង Android
-      - name: Inject Target Website URL
+      # ១. បញ្ចូល Target URL របស់អ្នកទៅក្នុងកូដ Android
+      - name: Inject Target URL
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
           [ -z "$TARGET_URL" ] && TARGET_URL="https://x8ki-letl-twmt.n7.xano.io/api:x1one-web2app/app"
-          
-          # ជំនួស URL នៅក្នុងឯកសារ Java និង Kotlin ទាំងអស់
-          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
-          find app/src/main -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
-          
-          # ជំនួស URL នៅក្នុង strings.xml (ប្រសិនបើមាន tag website_url ឬ web_url)
-          find app/src/main/res -name "strings.xml" -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|https://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i "s|http://example.com|$TARGET_URL|g" {} + 2>/dev/null || true
 
-      # ៣. កំណត់ឈ្មោះ App
+      # ២. កំណត់ឈ្មោះកម្មវិធី App Name
       - name: Configure App Name
         run: |
-          find app/src/main/res -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
+          find . -name "strings.xml" -exec sed -i 's|<string name="app_name">.*</string>|<string name="app_name">${{ github.event.inputs.app_name }}</string>|g' {} + 2>/dev/null || true
 
-      # ៤. ប្តូររូប Logo App (បើមាន URL ផ្ញើមកពី Website)
-      - name: Update App Logo
+      # ៣. ទាញយក និងប្តូររូប Icon (បើមាន URL)
+      - name: Process Custom Icon
         if: "${{ github.event.inputs.icon_url != '' }}"
         run: |
           curl -sL "${{ github.event.inputs.icon_url }}" -o /tmp/logo.png || true
-          find app/src/main/res -type d -name "mipmap-*" | while read dir; do
-            cp /tmp/logo.png "$dir/ic_launcher.png" 2>/dev/null || true
-            cp /tmp/logo.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+          find . -type d -name "res" | while read resdir; do
+            for dir in "$resdir"/mipmap-*; do
+              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher.png" 2>/dev/null || true
+              [ -d "$dir" ] && cp /tmp/logo.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+            done
           done
 
-      # ៥. កំណត់ Banner Free vs Paid
-      - name: Configure Banner
-        run: |
-          if [ "${{ github.event.inputs.is_free }}" == "true" ]; then
-            find app/src/main/res -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="gone"|android:id="@+id/company_banner" android:visibility="visible"|g' {} + 2>/dev/null || true
-          else
-            find app/src/main/res -name "*.xml" -exec sed -i 's|android:id="@+id/company_banner" android:visibility="visible"|android:id="@+id/company_banner" android:visibility="gone"|g' {} + 2>/dev/null || true
-          fi
-
-      # ៦. Compile APK
+      # ៤. ដំណើរការ Compile APK (ប្រើ gradle ផ្ទាល់ មិនឱ្យគាំង Exit code 127 ទៀតឡើយ)
       - name: Execute Android Build
         run: |
-          ./gradlew :app:assembleDebug --stacktrace || ./gradlew assembleDebug --stacktrace || ./gradlew assemble --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace || gradle assemble --no-daemon --stacktrace
+          fi
 
-      # ៧. Upload ឯកសារ APK
-      - name: Upload Output Artifact
+      # ៥. Upload ឯកសារ APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
-          path: "**/build/outputs/apk/**/*.apk"
+          path: "**/*.apk"
           if-no-files-found: ignore
-
