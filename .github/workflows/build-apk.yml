@@ -129,7 +129,7 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml (ភ្ជាប់ Icon និង Round Icon)
+          # AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -184,7 +184,7 @@ jobs:
           </resources>
           EOF
 
-          # activity_main.xml (មាន WebView, Banner, និង Loading Spinner Overlay)
+          # activity_main.xml (Loading Spinner Overlay)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -210,7 +210,6 @@ jobs:
                   android:textSize="12sp"
                   android:visibility="gone" />
 
-              <!-- Animated Loading Spinner Overlay -->
               <LinearLayout
                   android:id="@+id/layoutLoading"
                   android:layout_width="match_parent"
@@ -238,7 +237,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # MainActivity.java (គ្រប់គ្រង Loading Spinner និង Banner)
+          # MainActivity.java
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
@@ -310,7 +309,7 @@ jobs:
           }
           EOF
 
-      # ៣. បញ្ចូល Target URL, App Name, និង Banner Logic
+      # ៣. បញ្ចូល Parameters (URL, App Name, Banner)
       - name: Inject Custom Parameters
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -326,35 +325,50 @@ jobs:
           sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. រៀបចំ App Icon (ទទួលទាំង Base64, URL និងរូប x1One ដើម)
-      - name: Setup App Icon
+      # ៤. ដោនឡូតរូប Logo ជាន់ពីលើរូបមនុស្សយន្តចាស់ និងលុប Adaptive Vector ចោល
+      - name: Replace Android Icon with Custom Website Logo
         run: |
           RAW_ICON="${{ github.event.inputs.icon_url }}"
 
-          # ប្រសិនបើជា Base64 Data URL (data:image/...;base64,xxxx)
+          # ប្រសិនបើរូបជា Base64
           if echo "$RAW_ICON" | grep -q "base64,"; then
-            echo "$RAW_ICON" | sed 's/^data:image\/[a-z]*;base64,//' | base64 -d > /tmp/final_icon.png 2>/dev/null || true
+            echo "$RAW_ICON" | sed 's/^data:image\/[a-z]*;base64,//' | base64 -d > /tmp/custom_icon.png 2>/dev/null || true
           elif [ -n "$RAW_ICON" ] && echo "$RAW_ICON" | grep -q "^http"; then
-            curl -sL "$RAW_ICON" -o /tmp/final_icon.png || true
+            echo "Downloading custom logo from: $RAW_ICON"
+            curl -sSL "$RAW_ICON" -o /tmp/custom_icon.png || true
           fi
 
-          # ប្រសិនបើគ្មាន ឬទាញយកមិនបាន ប្រើប្រាស់រូប x1One HD ផ្លូវការដោយផ្ទាល់
-          if [ ! -s /tmp/final_icon.png ]; then
-            curl -sL "https://raw.githubusercontent.com/sokhoeun356/web2app-builder-my-web2app/main/app_icon.png" -o /tmp/final_icon.png 2>/dev/null || true
+          # បើគ្មាន Link ពិនិត្យមើលរូបក្នុង Repo
+          if [ ! -s /tmp/custom_icon.png ]; then
+            UPLOADED_ICON=$(find . -maxdepth 2 -type f \( -name "*icon*.png" -o -name "*logo*.png" -o -name "app_icon.*" \) | head -n 1)
+            [ -n "$UPLOADED_ICON" ] && cp "$UPLOADED_ICON" /tmp/custom_icon.png
           fi
 
-          # បើនៅតែគ្មានទៀត ទាញយករូប Logo x1One ពិតប្រាកដពីប្រភពផ្ទាល់
-          if [ ! -s /tmp/final_icon.png ]; then
-            curl -sL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/final_icon.png || true
+          # ប្រសិនបើគ្មានរូបទាល់តែសោះ ប្រើ Icon របស់ x1One ដើម
+          if [ ! -s /tmp/custom_icon.png ]; then
+            curl -sSL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/custom_icon.png || true
           fi
 
-          # ចម្លងចូលគ្រប់ mipmap ទាំង icon ធម្មតា និង icon មូល (ic_launcher_round)
-          for dir in app/src/main/res/mipmap-*; do
-            cp /tmp/final_icon.png "$dir/ic_launcher.png"
-            cp /tmp/final_icon.png "$dir/ic_launcher_round.png"
-          done
+          # ចម្លងរូប Logo ថ្មី ទៅជាន់ពីលើរូបមនុស្សយន្ត Android ចាស់ទាំងអស់
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
 
-      # ៥. ដំឡើង Gradle និងដំណើរការ Assemble APK
+          # ចម្លងរូប Logo ថ្មី ទៅជាន់ពីលើរូបមូល (Round Icon)
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+
+          # លុប Adaptive Vector ចាស់របស់ Android ចោល ដើម្បីកុំឲ្យជាប់រូបមនុស្សយន្តទៀត
+          rm -rf app/src/main/res/mipmap-anydpi-v26
+          rm -rf app/src/main/res/drawable/ic_launcher_background.xml
+          rm -rf app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+
+      # ៥. ដំឡើង Gradle និង Compile
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
