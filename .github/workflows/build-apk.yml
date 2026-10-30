@@ -19,6 +19,10 @@ on:
         description: 'Splash/Background Image URL'
         required: false
         default: ''
+      theme_mode:
+        description: 'App Theme (dark or light)'
+        required: false
+        default: 'dark'
       is_free:
         description: 'Has Company Banner'
         required: false
@@ -43,7 +47,7 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. បង្កើតរចនាសម្ព័ន្ធ Project Android ពេញលេញ
+      # ២. រៀបចំរចនាសម្ព័ន្ធ Project Android ពេញលេញ
       - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
@@ -57,7 +61,6 @@ jobs:
 
           touch app/proguard-rules.pro
 
-          # gradle.properties
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
@@ -65,7 +68,6 @@ jobs:
           android.nonTransitiveRClass=false
           EOF
 
-          # settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -85,14 +87,12 @@ jobs:
           include ':app'
           EOF
 
-          # Root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -129,7 +129,6 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -157,7 +156,6 @@ jobs:
           </manifest>
           EOF
 
-          # values files
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -170,10 +168,12 @@ jobs:
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.Web2App" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:windowBackground">#FFFFFF</item>
+                  <item name="android:windowBackground">#000000</item>
                   <item name="colorPrimary">@color/colorPrimary</item>
                   <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
                   <item name="colorAccent">@color/colorAccent</item>
+                  <item name="android:windowTranslucentStatus">true</item>
+                  <item name="android:windowTranslucentNavigation">true</item>
               </style>
           </resources>
           EOF
@@ -184,12 +184,15 @@ jobs:
           </resources>
           EOF
 
-          # activity_main.xml (Loading Spinner Overlay)
+          # activity_main.xml (ពេញអេក្រង់ និងមាន Loading Overlay បែបកញ្ចក់)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/mainRootLayout"
               android:layout_width="match_parent"
-              android:layout_height="match_parent">
+              android:layout_height="match_parent"
+              android:background="#0A0F1D"
+              android:fitsSystemWindows="false">
 
               <WebView
                   android:id="@+id/webView"
@@ -216,16 +219,18 @@ jobs:
                   android:layout_height="match_parent"
                   android:orientation="vertical"
                   android:gravity="center"
-                  android:background="#0F172A"
+                  android:background="#E60A0F1D"
                   android:visibility="visible">
 
                   <ProgressBar
+                      android:id="@+id/progressBar"
                       android:layout_width="56dp"
                       android:layout_height="56dp"
                       android:indeterminate="true"
                       android:indeterminateTint="#84CC16" />
 
                   <TextView
+                      android:id="@+id/txtLoading"
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="16dp"
@@ -237,18 +242,23 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # MainActivity.java
+          # MainActivity.java (កូដកំណត់ Full Screen និងប្ដូរ Theme Mode)
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
           import android.annotation.SuppressLint;
           import android.graphics.Bitmap;
+          import android.graphics.Color;
+          import android.os.Build;
           import android.os.Bundle;
           import android.view.View;
+          import android.view.WindowManager;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.LinearLayout;
+          import android.widget.ProgressBar;
+          import android.widget.RelativeLayout;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
 
@@ -257,16 +267,38 @@ jobs:
               private LinearLayout layoutLoading;
               private static final String APP_URL = "URL_INJECT_POINT";
               private static final boolean SHOW_BANNER = BANNER_INJECT_POINT;
+              private static final String THEME_MODE = "THEME_INJECT_POINT";
 
               @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                      getWindow().setFlags(
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                      );
+                  }
+
                   setContentView(R.layout.activity_main);
 
+                  RelativeLayout mainRoot = findViewById(R.id.mainRootLayout);
                   webView = findViewById(R.id.webView);
                   layoutLoading = findViewById(R.id.layoutLoading);
                   TextView bannerView = findViewById(R.id.bannerView);
+                  TextView txtLoading = findViewById(R.id.txtLoading);
+
+                  // អនុវត្ត Theme តាមជម្រើសដែលជ្រើសរើស (Dark ឬ Light)
+                  if ("light".equalsIgnoreCase(THEME_MODE)) {
+                      mainRoot.setBackgroundColor(Color.parseColor("#F8FAFC"));
+                      layoutLoading.setBackgroundColor(Color.parseColor("#E6F8FAFC"));
+                      txtLoading.setTextColor(Color.parseColor("#0F172A"));
+                  } else {
+                      mainRoot.setBackgroundColor(Color.parseColor("#0A0F1D"));
+                      layoutLoading.setBackgroundColor(Color.parseColor("#E60A0F1D"));
+                      txtLoading.setTextColor(Color.parseColor("#94A3B8"));
+                  }
 
                   if (SHOW_BANNER) {
                       bannerView.setVisibility(View.VISIBLE);
@@ -309,7 +341,7 @@ jobs:
           }
           EOF
 
-      # ៣. បញ្ចូល Parameters (URL, App Name, Banner)
+      # ៣. បញ្ចូល Parameters (URL, App Name, Banner, Theme)
       - name: Inject Custom Parameters
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -321,16 +353,19 @@ jobs:
           IS_FREE_VAL="${{ github.event.inputs.is_free }}"
           [ -z "$IS_FREE_VAL" ] && IS_FREE_VAL="true"
 
+          THEME_VAL="${{ github.event.inputs.theme_mode }}"
+          [ -z "$THEME_VAL" ] && THEME_VAL="dark"
+
           sed -i "s|URL_INJECT_POINT|$TARGET_URL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|BANNER_INJECT_POINT|$IS_FREE_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
+          sed -i "s|THEME_INJECT_POINT|$THEME_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. ដោនឡូតរូប Logo ជាន់ពីលើរូបមនុស្សយន្តចាស់ និងលុប Adaptive Vector ចោល
+      # ៤. រៀបចំ App Icon
       - name: Replace Android Icon with Custom Website Logo
         run: |
           RAW_ICON="${{ github.event.inputs.icon_url }}"
 
-          # ប្រសិនបើរូបជា Base64
           if echo "$RAW_ICON" | grep -q "base64,"; then
             echo "$RAW_ICON" | sed 's/^data:image\/[a-z]*;base64,//' | base64 -d > /tmp/custom_icon.png 2>/dev/null || true
           elif [ -n "$RAW_ICON" ] && echo "$RAW_ICON" | grep -q "^http"; then
@@ -338,32 +373,27 @@ jobs:
             curl -sSL "$RAW_ICON" -o /tmp/custom_icon.png || true
           fi
 
-          # បើគ្មាន Link ពិនិត្យមើលរូបក្នុង Repo
           if [ ! -s /tmp/custom_icon.png ]; then
             UPLOADED_ICON=$(find . -maxdepth 2 -type f \( -name "*icon*.png" -o -name "*logo*.png" -o -name "app_icon.*" \) | head -n 1)
             [ -n "$UPLOADED_ICON" ] && cp "$UPLOADED_ICON" /tmp/custom_icon.png
           fi
 
-          # ប្រសិនបើគ្មានរូបទាល់តែសោះ ប្រើ Icon របស់ x1One ដើម
           if [ ! -s /tmp/custom_icon.png ]; then
             curl -sSL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/custom_icon.png || true
           fi
 
-          # ចម្លងរូប Logo ថ្មី ទៅជាន់ពីលើរូបមនុស្សយន្ត Android ចាស់ទាំងអស់
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
 
-          # ចម្លងរូប Logo ថ្មី ទៅជាន់ពីលើរូបមូល (Round Icon)
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
 
-          # លុប Adaptive Vector ចាស់របស់ Android ចោល ដើម្បីកុំឲ្យជាប់រូបមនុស្សយន្តទៀត
           rm -rf app/src/main/res/mipmap-anydpi-v26
           rm -rf app/src/main/res/drawable/ic_launcher_background.xml
           rm -rf app/src/main/res/drawable-v24/ic_launcher_foreground.xml
