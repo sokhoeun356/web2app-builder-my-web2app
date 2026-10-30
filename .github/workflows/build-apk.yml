@@ -47,7 +47,7 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # ២. រៀបចំរចនាសម្ព័ន្ធ Project Android ពេញលេញ
+      # ២. បង្កើតរចនាសម្ព័ន្ធ Project Android
       - name: Scaffold Complete Android Project
         run: |
           mkdir -p app/src/main/java/com/x1one/web2app
@@ -110,12 +110,25 @@ jobs:
                   versionName "1.0"
               }
 
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword "x1one_secure_pass"
+                      keyAlias "x1one_alias"
+                      keyPassword "x1one_secure_pass"
+                      v1SigningEnabled true
+                      v2SigningEnabled true
+                  }
+              }
+
               buildTypes {
                   release {
                       minifyEnabled false
+                      signingConfig signingConfigs.release
                   }
                   debug {
                       minifyEnabled false
+                      signingConfig signingConfigs.release
                   }
               }
               compileOptions {
@@ -161,17 +174,14 @@ jobs:
           <resources>
               <color name="colorPrimary">#0D0D11</color>
               <color name="colorPrimaryDark">#000000</color>
-              <color name="colorAccent">#0073E6</color>
+              <color name="colorAccent">#84CC16</color>
           </resources>
           EOF
 
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.Web2App" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:windowBackground">#000000</item>
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-                  <item name="colorAccent">@color/colorAccent</item>
+                  <item name="android:windowBackground">#070B14</item>
                   <item name="android:windowTranslucentStatus">true</item>
                   <item name="android:windowTranslucentNavigation">true</item>
               </style>
@@ -184,14 +194,14 @@ jobs:
           </resources>
           EOF
 
-          # activity_main.xml (ពេញអេក្រង់ និងមាន Loading Overlay បែបកញ្ចក់)
+          # layout activity_main.xml (លាតធ្លាយពេញអេក្រង់ Fullscreen)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/mainRootLayout"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:background="#0A0F1D"
+              android:background="#070B14"
               android:fitsSystemWindows="false">
 
               <WebView
@@ -205,7 +215,7 @@ jobs:
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:layout_alignParentBottom="true"
-                  android:background="#222222"
+                  android:background="#1E293B"
                   android:gravity="center"
                   android:padding="8dp"
                   android:text="Free Version • Powered by x1One"
@@ -219,7 +229,7 @@ jobs:
                   android:layout_height="match_parent"
                   android:orientation="vertical"
                   android:gravity="center"
-                  android:background="#E60A0F1D"
+                  android:background="#070B14"
                   android:visibility="visible">
 
                   <ProgressBar
@@ -242,7 +252,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # MainActivity.java (កូដកំណត់ Full Screen និងប្ដូរ Theme Mode)
+          # MainActivity.java (គ្រប់គ្រង Immersive Fullscreen និង Theme)
           cat << 'EOF' > app/src/main/java/com/x1one/web2app/MainActivity.java
           package com.x1one.web2app;
 
@@ -257,7 +267,6 @@ jobs:
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.LinearLayout;
-          import android.widget.ProgressBar;
           import android.widget.RelativeLayout;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
@@ -289,14 +298,13 @@ jobs:
                   TextView bannerView = findViewById(R.id.bannerView);
                   TextView txtLoading = findViewById(R.id.txtLoading);
 
-                  // អនុវត្ត Theme តាមជម្រើសដែលជ្រើសរើស (Dark ឬ Light)
                   if ("light".equalsIgnoreCase(THEME_MODE)) {
-                      mainRoot.setBackgroundColor(Color.parseColor("#F8FAFC"));
-                      layoutLoading.setBackgroundColor(Color.parseColor("#E6F8FAFC"));
+                      mainRoot.setBackgroundColor(Color.parseColor("#F1F5F9"));
+                      layoutLoading.setBackgroundColor(Color.parseColor("#F1F5F9"));
                       txtLoading.setTextColor(Color.parseColor("#0F172A"));
                   } else {
-                      mainRoot.setBackgroundColor(Color.parseColor("#0A0F1D"));
-                      layoutLoading.setBackgroundColor(Color.parseColor("#E60A0F1D"));
+                      mainRoot.setBackgroundColor(Color.parseColor("#070B14"));
+                      layoutLoading.setBackgroundColor(Color.parseColor("#070B14"));
                       txtLoading.setTextColor(Color.parseColor("#94A3B8"));
                   }
 
@@ -341,7 +349,20 @@ jobs:
           }
           EOF
 
-      # ៣. បញ្ចូល Parameters (URL, App Name, Banner, Theme)
+      # ៣. បង្កើត Digital Keystore សម្រាប់ Release (បំបាត់ Alert Play Protect)
+      - name: Create Production Signing Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/release.keystore \
+            -alias x1one_alias \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass x1one_secure_pass \
+            -keypass x1one_secure_pass \
+            -dname "CN=x1One AI, OU=Development, O=x1One Web2App, L=Phnom Penh, ST=Phnom Penh, C=KH"
+
+      # ៤. បញ្ចូល Parameters (URL, App Name, Banner, Theme)
       - name: Inject Custom Parameters
         run: |
           TARGET_URL="${{ github.event.inputs.website_url }}"
@@ -361,15 +382,14 @@ jobs:
           sed -i "s|THEME_INJECT_POINT|$THEME_VAL|g" app/src/main/java/com/x1one/web2app/MainActivity.java
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-      # ៤. រៀបចំ App Icon
-      - name: Replace Android Icon with Custom Website Logo
+      # ៥. លុប Icon មនុស្សយន្តចាស់ និងជំនួសដោយរូប Logo x1One ផ្លូវការ ១០០%
+      - name: Setup Official Custom App Icon
         run: |
           RAW_ICON="${{ github.event.inputs.icon_url }}"
 
           if echo "$RAW_ICON" | grep -q "base64,"; then
             echo "$RAW_ICON" | sed 's/^data:image\/[a-z]*;base64,//' | base64 -d > /tmp/custom_icon.png 2>/dev/null || true
           elif [ -n "$RAW_ICON" ] && echo "$RAW_ICON" | grep -q "^http"; then
-            echo "Downloading custom logo from: $RAW_ICON"
             curl -sSL "$RAW_ICON" -o /tmp/custom_icon.png || true
           fi
 
@@ -378,27 +398,22 @@ jobs:
             [ -n "$UPLOADED_ICON" ] && cp "$UPLOADED_ICON" /tmp/custom_icon.png
           fi
 
+          # បើគ្មានរូបទាញយក ប្រើប្រាស់ Logo x1One ផ្លូវការដោយផ្ទាល់
           if [ ! -s /tmp/custom_icon.png ]; then
             curl -sSL "https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI0LTAzL29yaWdpbmFsX3Bob3RvX2FydGlzdF9tYWtlcl9pY29uXzEwZDAzNDBiLTEwNGQtNGFhNC05MTZlLWFjZmIxYWFlOWY2YS5wbmc.png" -o /tmp/custom_icon.png || true
           fi
 
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp /tmp/custom_icon.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-
+          # លុប Adaptive Vector ចាស់របស់ Android ចោលទាំងស្រុង មិនឱ្យចេញរូបមនុស្សយន្ត
           rm -rf app/src/main/res/mipmap-anydpi-v26
           rm -rf app/src/main/res/drawable/ic_launcher_background.xml
           rm -rf app/src/main/res/drawable-v24/ic_launcher_foreground.xml
 
-      # ៥. ដំឡើង Gradle និង Compile
+          for dir in app/src/main/res/mipmap-*; do
+            cp /tmp/custom_icon.png "$dir/ic_launcher.png"
+            cp /tmp/custom_icon.png "$dir/ic_launcher_round.png"
+          done
+
+      # ៦. Compile Signed Release APK
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
@@ -406,12 +421,12 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      # ៦. បញ្ចេញឯកសារ APK
+      # ៧. បញ្ចេញឯកសារ APK ផ្លូវការ
       - name: Upload Output Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Web2App-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
